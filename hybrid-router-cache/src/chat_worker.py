@@ -56,11 +56,18 @@ def handle_message(event):
         result = run_pipeline(text)
         
         # Format the response
+        goal_routes = result.get("routing", {}).get("goal", [])
+        plan_routes = result.get("routing", {}).get("plan", [])
+        goal_route = goal_routes[-1]["tier"] if goal_routes else "cache/local"
+        plan_route = plan_routes[-1]["tier"] if plan_routes else "cache/local"
+
         formatted_response = (
             f"**Goal Understood:**\n```json\n{json.dumps(result['goal'], indent=2)}\n```\n\n"
             f"**Task Plan:**\n```json\n{json.dumps(result['tasks'], indent=2)}\n```\n\n"
             f"---\n"
-            f"*Metrics: Cache Hit (Goal: {result['cache_hits']['goal']}, Plan: {result['cache_hits']['plan']}) | "
+            f"*Metrics: Cache (Goal: {result['cache_hits']['goal']}, Plan: {result['cache_hits']['plan']}) | "
+            f"Fireworks Tokens: {result.get('fireworks_tokens', 0)} | "
+            f"Route (Goal: {goal_route}, Plan: {plan_route}) | "
             f"Tokens: {result['tokens_used']} | Latency: {result['latency_sec']}s*"
         )
         

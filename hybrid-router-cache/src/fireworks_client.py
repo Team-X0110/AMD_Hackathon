@@ -16,6 +16,7 @@ Your teammate's Fireworks Routing Engine plugs in by changing LLM_BACKEND in .en
 """
 from __future__ import annotations
 import json
+import logging
 import time
 
 import requests
@@ -30,12 +31,16 @@ from src.config import (
     CHAT_URL,
     FIREWORKS_EMBED_URL,
     EMBED_MODEL,
+    EMBED_BACKEND,
     REQUEST_TIMEOUT_CLOUD,
+    FIREWORKS_API_KEY,
     # Routing
     LLM_BACKEND,
     DEFAULT_TEMPERATURE,
     DEFAULT_MAX_RETRIES,
 )
+
+logger = logging.getLogger(__name__)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -112,15 +117,16 @@ def call_ollama_chat(
             body = resp.json()
             content = body["message"]["content"]
 
-            # Ollama token counts
-            usage = {
-                "prompt_tokens": body.get("prompt_eval_count", 0),
-                "completion_tokens": body.get("eval_count", 0),
-                "total_tokens": (
-                    body.get("prompt_eval_count", 0) + body.get("eval_count", 0)
-                ),
-            }
-            return json.loads(content), usage
+            return json.loads(content), _normalize_usage(
+                {
+                    "prompt_tokens": body.get("prompt_eval_count", 0),
+                    "completion_tokens": body.get("eval_count", 0),
+                    "total_tokens": (
+                        body.get("prompt_eval_count", 0) + body.get("eval_count", 0)
+                    ),
+                },
+                backend="local",
+            )
 
         except requests.exceptions.ConnectionError as e:
             raise RuntimeError(
@@ -131,7 +137,12 @@ def call_ollama_chat(
         except (requests.RequestException, json.JSONDecodeError, KeyError) as e:
             if attempt < max_retries:
                 wait = 1.5 * (attempt + 1)
-                print(f"[ollama] Error attempt {attempt + 1}: {e}, retrying in {wait:.1f}s")
+                logger.warning(
+                    "Ollama error attempt %s: %s, retrying in %.1fs",
+                    attempt + 1,
+                    e,
+                    wait,
+                )
                 time.sleep(wait)
                 last_exc = e
                 continue
@@ -157,6 +168,7 @@ def call_fireworks_chat(
     Call Fireworks AI chat completions in JSON mode.
     Requires FIREWORKS_API_KEY in .env.
     """
+    _require_fireworks_api_key()
     payload = {
         "model": model,
         "messages": [
@@ -181,18 +193,18 @@ def call_fireworks_chat(
             body = resp.json()
             content = body["choices"][0]["message"]["content"]
             usage = body.get("usage", {})
-            # Normalise keys to match Ollama shape
-            return json.loads(content), {
-                "prompt_tokens": usage.get("prompt_tokens", 0),
-                "completion_tokens": usage.get("completion_tokens", 0),
-                "total_tokens": usage.get("total_tokens", 0),
-            }
+            return json.loads(content), _normalize_usage(usage, backend="fireworks")
 
         except requests.exceptions.HTTPError as e:
             status = e.response.status_code if e.response is not None else 0
             if status in (429, 500, 502, 503, 504) and attempt < max_retries:
                 wait = 1.5 * (attempt + 1)
-                print(f"[fireworks] HTTP {status} attempt {attempt + 1}, retrying in {wait:.1f}s")
+                logger.warning(
+                    "Fireworks HTTP %s attempt %s, retrying in %.1fs",
+                    status,
+                    attempt + 1,
+                    wait,
+                )
                 time.sleep(wait)
                 last_exc = e
                 continue
@@ -201,7 +213,12 @@ def call_fireworks_chat(
         except (requests.RequestException, json.JSONDecodeError, KeyError) as e:
             if attempt < max_retries:
                 wait = 1.5 * (attempt + 1)
-                print(f"[fireworks] Error attempt {attempt + 1}: {e}, retrying in {wait:.1f}s")
+                logger.warning(
+                    "Fireworks error attempt %s: %s, retrying in %.1fs",
+                    attempt + 1,
+                    e,
+                    wait,
+                )
                 time.sleep(wait)
                 last_exc = e
                 continue
@@ -212,34 +229,128 @@ def call_fireworks_chat(
     raise RuntimeError(f"Fireworks call failed: {last_exc}")
 
 
+def _normalize_usage(usage: dict, *, backend: str) -> dict:
+    """Attach backend label so callers can split Fireworks vs local token counts."""
+    normalized = {
+        "prompt_tokens": usage.get("prompt_tokens", 0),
+        "completion_tokens": usage.get("completion_tokens", 0),
+        "total_tokens": usage.get("total_tokens", 0),
+        "backend": backend,
+    }
+    if not normalized["total_tokens"]:
+        normalized["total_tokens"] = (
+            normalized["prompt_tokens"] + normalized["completion_tokens"]
+        )
+    return normalized
+
+
+def _require_fireworks_api_key() -> None:
+    if not FIREWORKS_API_KEY:
+        raise RuntimeError("Missing FIREWORKS_API_KEY for Fireworks request")
+
+
+def call_fireworks_with_tools(
+    model: str,
+    messages: list[dict],
+    tools: list[dict],
+    *,
+    tool_choice: dict | str = "auto",
+    temperature: float = 0.1,
+    max_retries: int = DEFAULT_MAX_RETRIES,
+) -> tuple[dict, dict]:
+    """
+    Fireworks Function Calling — returns parsed tool arguments and usage.
+
+    Returns:
+        (tool_args_dict, usage_dict with backend='fireworks')
+    """
+    _require_fireworks_api_key()
+    payload: dict = {
+        "model": model,
+        "messages": messages,
+        "tools": tools,
+        "temperature": temperature,
+    }
+    if tool_choice != "auto":
+        payload["tool_choice"] = tool_choice
+
+    last_exc: Exception | None = None
+    for attempt in range(max_retries + 1):
+        try:
+            resp = requests.post(
+                CHAT_URL,
+                headers=AUTH_HEADERS,
+                json=payload,
+                timeout=REQUEST_TIMEOUT_CLOUD,
+            )
+            resp.raise_for_status()
+
+            body = resp.json()
+            message = body["choices"][0]["message"]
+            tool_calls = message.get("tool_calls") or []
+            if not tool_calls:
+                raise RuntimeError("Fireworks FC returned no tool_calls")
+
+            raw_args = tool_calls[0]["function"]["arguments"]
+            tool_args = json.loads(raw_args) if isinstance(raw_args, str) else raw_args
+            if not isinstance(tool_args, dict):
+                raise RuntimeError("Fireworks FC returned non-object tool arguments")
+            usage = _normalize_usage(body.get("usage", {}), backend="fireworks")
+            return tool_args, usage
+
+        except requests.exceptions.HTTPError as e:
+            status = e.response.status_code if e.response is not None else 0
+            if status in (429, 500, 502, 503, 504) and attempt < max_retries:
+                time.sleep(1.5 * (attempt + 1))
+                last_exc = e
+                continue
+            raise RuntimeError(f"Fireworks FC HTTP {status}: {e}") from e
+
+        except (requests.RequestException, json.JSONDecodeError, KeyError, IndexError) as e:
+            if attempt < max_retries:
+                time.sleep(1.5 * (attempt + 1))
+                last_exc = e
+                continue
+            raise RuntimeError(f"Fireworks FC failed: {e}") from e
+
+    raise RuntimeError(f"Fireworks FC failed: {last_exc}")
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Embeddings  (used by semantic cache)
 # ─────────────────────────────────────────────────────────────────────────────
 
-def get_embedding(
-    text: str,
-    model: str = EMBED_MODEL,
-    max_retries: int = DEFAULT_MAX_RETRIES,
-) -> list[float]:
-    """
-    Get a text embedding vector.
-    Uses local Ollama if LLM_BACKEND is "local", otherwise Fireworks cloud.
-    """
-    if LLM_BACKEND == "local":
-        OLLAMA_EMBED_URL = "http://localhost:11434/api/embeddings"
-        payload = {"model": "nomic-embed-text", "prompt": text}
-        for attempt in range(max_retries + 1):
-            try:
-                resp = requests.post(OLLAMA_EMBED_URL, json=payload, timeout=REQUEST_TIMEOUT_LOCAL)
-                resp.raise_for_status()
-                return resp.json()["embedding"]
-            except (requests.RequestException, KeyError) as e:
-                if attempt < max_retries:
-                    time.sleep(1.5 * (attempt + 1))
-                    continue
-                raise RuntimeError(f"Ollama embedding failed: {e}") from e
+def _get_embedding_local(text: str, max_retries: int) -> list[float]:
+    ollama_embed_url = "http://localhost:11434/api/embeddings"
+    payload = {"model": "nomic-embed-text", "prompt": text}
+    last_exc: Exception | None = None
+    for attempt in range(max_retries + 1):
+        try:
+            resp = requests.post(
+                ollama_embed_url, json=payload, timeout=REQUEST_TIMEOUT_LOCAL
+            )
+            resp.raise_for_status()
+            return resp.json()["embedding"]
+        except requests.exceptions.ConnectionError as e:
+            raise RuntimeError(
+                "Cannot connect to Ollama at http://localhost:11434. "
+                "Make sure Ollama is running: `ollama serve`"
+            ) from e
+        except (requests.RequestException, KeyError) as e:
+            if attempt < max_retries:
+                time.sleep(1.5 * (attempt + 1))
+                last_exc = e
+                continue
+            raise RuntimeError(f"Ollama embedding failed: {e}") from e
+    raise RuntimeError(f"Ollama embedding failed: {last_exc}")
 
-    # Fireworks Cloud
+
+def _get_embedding_fireworks(
+    text: str,
+    model: str,
+    max_retries: int,
+) -> list[float]:
+    _require_fireworks_api_key()
     payload = {"model": model, "input": text}
     last_exc: Exception | None = None
     for attempt in range(max_retries + 1):
@@ -256,14 +367,41 @@ def get_embedding(
         except (requests.RequestException, KeyError, IndexError) as e:
             if attempt < max_retries:
                 wait = 1.5 * (attempt + 1)
-                print(f"[embedding] Error attempt {attempt + 1}: {e}, retrying in {wait:.1f}s")
+                logger.warning(
+                    "Fireworks embedding error attempt %s: %s, retrying in %.1fs",
+                    attempt + 1,
+                    e,
+                    wait,
+                )
                 time.sleep(wait)
                 last_exc = e
                 continue
             raise RuntimeError(
-                f"Embedding call failed after {max_retries + 1} attempts: {e}"
+                f"Fireworks embedding failed after {max_retries + 1} attempts: {e}"
             ) from e
 
-    raise RuntimeError(f"Embedding call failed: {last_exc}")
+    raise RuntimeError(f"Fireworks embedding failed: {last_exc}")
+
+
+def get_embedding(
+    text: str,
+    model: str = EMBED_MODEL,
+    max_retries: int = DEFAULT_MAX_RETRIES,
+) -> list[float]:
+    """
+    Get a text embedding vector.
+    Prefers local Ollama when EMBED_BACKEND=local (zero Fireworks tokens).
+    Falls back to Fireworks when Ollama is unreachable and an API key is set.
+    """
+    if EMBED_BACKEND == "local":
+        try:
+            return _get_embedding_local(text, max_retries)
+        except RuntimeError as exc:
+            if FIREWORKS_API_KEY:
+                logger.warning("Local embedding unavailable, using Fireworks fallback: %s", exc)
+                return _get_embedding_fireworks(text, model, max_retries)
+            raise
+
+    return _get_embedding_fireworks(text, model, max_retries)
 
 

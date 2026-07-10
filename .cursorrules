@@ -1,0 +1,31 @@
+You are working in a production codebase.
+
+Before generating code:
+- Analyze the repository.
+- Reuse existing implementations.
+- Avoid duplicate functionality.
+- Extend existing modules rather than replacing them.
+- Preserve backward compatibility unless explicitly instructed otherwise.
+
+When implementing:
+- Follow SOLID principles.
+- Follow Clean Architecture.
+- Use async where appropriate.
+- Use Pydantic for validation.
+- Keep functions small and modular.
+- Add type hints.
+- Add logging and error handling.
+- Write production-ready code.
+
+Never:
+- Rewrite the project structure unnecessarily.
+- Create duplicate services.
+- Ignore existing architecture.
+- Remove existing functionality without reason.
+- Introduce breaking changes silently.
+
+Always:
+- Explain what files are modified.
+- Explain why.
+- Ensure new code integrates with the current architecture.
+- Maintain consistency across the codebase.

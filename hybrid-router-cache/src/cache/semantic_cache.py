@@ -6,6 +6,7 @@ from __future__ import annotations
 import numpy as np
 
 from src.cache.firestore_client import get_db
+from src.cache.memory_store import memory_list
 from src.cache.exact_cache import normalize
 from src.fireworks_client import get_embedding
 from src.config import SEMANTIC_THRESHOLD, CACHE_LOOKBACK_LIMIT
@@ -27,12 +28,20 @@ def semantic_lookup(
 ) -> tuple[dict | None, float]:
     """
     Search the collection for the most semantically similar cached entry.
+    Skips lookup if embeddings are unavailable (pipeline continues without semantic hit).
     """
-    query_emb = get_embedding(normalize(query_text))
+    try:
+        query_emb = get_embedding(normalize(query_text))
+    except RuntimeError as exc:
+        print(f"[semantic_cache] Skipping semantic lookup: {exc}")
+        return None, 0.0
 
-    # Fetch recent cache entries (no index required — sort in Python)
-    ref = get_db().child(collection)
-    raw = ref.get()
+    try:
+        ref = get_db().child(collection)
+        raw = ref.get()
+    except Exception as exc:
+        print(f"[semantic_cache] RTDB unavailable, using in-memory cache: {exc}")
+        raw = memory_list(collection)
 
     if not raw:
         return None, 0.0
