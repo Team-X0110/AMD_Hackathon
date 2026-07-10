@@ -1,6 +1,19 @@
-# AMD Hackathon — AI Chat Pipeline
+# AMD Hackathon — AI Chat Pipeline (Llama 3 Edition)
 
 A full-stack real-time chat application powered by an AI planning pipeline. Users send messages through a React chat UI; a Python backend worker picks up each message, runs it through a two-agent LLM pipeline (Goal Understanding → Task Planning), and replies as **AMD Bot** — all in real-time via Firebase.
+
+🔥 **Powered by Llama 3**: The AI pipeline relies on **Llama 3.1 8B**, which can be run fully locally (via Ollama) to leverage local AMD hardware, or via cloud (Fireworks AI) for quick prototyping!
+
+---
+
+## 🚀 Quick Onboarding for Teammates
+
+If you just cloned this repo and want to get it running, you need **two sets of secrets** that are not committed to git:
+
+1. **Firebase Service Account JSON (`hybrid-router-cache/amd-hackathon...json`)**: Ask Swayam for this file and place it in the `hybrid-router-cache` directory. Then, set `FIREBASE_KEY_PATH` in your backend `.env`.
+2. **Frontend Firebase Config (`frontend/.env`)**: Copy `frontend/.env.example` to `frontend/.env` and fill in the Web API keys (Ask Swayam or find them in the Firebase Console).
+
+Once you have these, follow the **Setup** instructions below!
 
 ---
 

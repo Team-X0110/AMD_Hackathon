@@ -1,20 +1,22 @@
-# Hybrid Router Cache
+# Hybrid Router Cache (Llama 3 Edition)
 
 A two-agent LLM pipeline (Goal Understanding → Task Planning) with a two-layer cache:
 
 - **Exact cache** — SHA-256 hash match on normalized prompt → zero tokens used
-- **Semantic cache** — cosine similarity on Fireworks embeddings → zero tokens, handles paraphrases
+- **Semantic cache** — cosine similarity on embeddings → zero tokens, handles paraphrases
 
 ## Stack
 
 | Component | Choice |
 |-----------|--------|
-| LLM Inference | Fireworks AI (llama-v3p1-8b / 70b) |
-| Embeddings | nomic-ai/nomic-embed-text-v1.5 via Fireworks |
+| LLM Inference | Llama 3.1 8B (via Ollama locally or Fireworks AI) |
+| Embeddings | nomic-ai/nomic-embed-text-v1.5 (via Fireworks) |
 | Cache / DB | Google Firestore (Native mode) |
 | Language | Python 3.11+ |
 
-## Quick Start
+## Quick Start for Teammates
+
+**Important**: Ask Swayam for the `firebase-key.json` file and the API keys, as they are not committed to git!
 
 ```bash
 # 1. Install deps
@@ -22,7 +24,8 @@ pip install -r requirements.txt
 
 # 2. Add API keys
 cp .env.example .env   # then fill in FIREWORKS_API_KEY
-# Place your Firebase service-account JSON as firebase-key.json
+# Place the Firebase service-account JSON in this directory and update FIREBASE_KEY_PATH in .env
+
 
 # 3. Checkpoint 1 — confirm Firestore connection
 python -c "from src.cache.firestore_client import get_db; db=get_db(); print('Firestore OK')"
