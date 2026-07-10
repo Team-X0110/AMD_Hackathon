@@ -1,0 +1,47 @@
+# .gitignore for hybrid-router-cache
+
+# ── Secrets — NEVER commit these ──────────────────────────────────────────────
+.env
+firebase-key.json
+*.json.key
+
+# ── Python ────────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+pip-wheel-metadata/
+
+# ── Virtual environments ──────────────────────────────────────────────────────
+venv/
+.venv/
+env/
+.env/
+ENV/
+
+# ── Logs ─────────────────────────────────────────────────────────────────────
+logs/*.jsonl
+
+# ── Testing ───────────────────────────────────────────────────────────────────
+.pytest_cache/
+.coverage
+htmlcov/
+*.xml
+
+# ── IDE ───────────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# ── macOS ─────────────────────────────────────────────────────────────────────
+.DS_Store
+
+.env
+amd-hackathon-*.json
+firebase-key.json

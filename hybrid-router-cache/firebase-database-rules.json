@@ -1,0 +1,30 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "goal_cache": {
+      ".read": "auth != null",
+      ".write": "auth != null",
+      ".indexOn": ["created_at"]
+    },
+    "plan_cache": {
+      ".read": "auth != null",
+      ".write": "auth != null",
+      ".indexOn": ["created_at"]
+    },
+    "goal_cache_test_ci": {
+      ".read": "auth != null",
+      ".write": "auth != null",
+      ".indexOn": ["created_at"]
+    },
+    "plan_cache_test_ci": {
+      ".read": "auth != null",
+      ".write": "auth != null",
+      ".indexOn": ["created_at"]
+    },
+    "_connectivity_test": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    }
+  }
+}

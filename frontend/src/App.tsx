@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { FirebaseConfigProvider, useFirebaseConfig } from './context/FirebaseConfigContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
-import { FirebaseSetup } from './components/FirebaseSetup';
+// Removed FirebaseSetup import
 import { Sidebar } from './components/Sidebar';
 import { ChatWindow } from './components/ChatWindow';
 
@@ -19,7 +19,16 @@ const MainLayout: React.FC = () => {
   );
 
   if (isConfigLoading) return spinnerScreen('Checking configurations...');
-  if (!isConfigured) return <FirebaseSetup />;
+  if (!isConfigured) {
+    return (
+      <div className="min-h-screen w-full flex flex-col items-center justify-center bg-slate-50 dark:bg-[#090a11]">
+        <h2 className="text-xl font-bold text-slate-800 dark:text-white mb-2">Missing Firebase Configuration</h2>
+        <p className="text-sm text-slate-500 max-w-md text-center">
+          Please provide your Firebase configuration by creating a <code>.env</code> file in the <code>frontend/</code> directory with the necessary <code>VITE_FIREBASE_*</code> variables.
+        </p>
+      </div>
+    );
+  }
   if (isAuthLoading) return spinnerScreen('Connecting to AMDChat services...');
   if (!currentUser) return spinnerScreen('Entering chat room...');
 
