@@ -1,39 +1,36 @@
 """
-agents/task_planning.py — Task Planning Agent.
+agents/task_planning.py — Task Planning Agent (Agent 2).
 
-Runs fully locally via Ollama (llama3.1:8b) right now.
-To switch to Fireworks cloud: set LLM_BACKEND=fireworks in .env — zero code change.
-
-Key differences from Goal Understanding Agent:
-  1. Cache key is based on normalized GOAL JSON, not the raw prompt.
-     Two differently-worded prompts that produce the same goal share a plan cache entry.
-  2. Validates a dependency graph — checks for unknown deps and cycles (Kahn's algorithm).
-  3. Retries once with corrective note if validation fails.
+Cache handling has been moved to the top-level Routing Engine in pipeline.py.
+This agent receives a dynamically routed model tier, decomposes the goal into 
+an actionable dependency graph, and includes self-healing retry logic if 
+DAG validation fails.
 """
 from __future__ import annotations
 import json
 
-from src.config import LLM_BACKEND, LOCAL_MODEL, PLAN_MODEL, PLAN_COLLECTION
-from src.fireworks_client import call_llm, get_embedding
-from src.cache.exact_cache import normalize, hash_key, get_cached, set_cached
-from src.cache.semantic_cache import semantic_lookup
+from src.config import LOCAL_MODEL, PLAN_MODEL
+from src.fireworks_client import call_llm
 from src.validators import validate_task_graph
 
 
-# ── Which model to use per backend ────────────────────────────────────────────
-def _model() -> str:
-    return LOCAL_MODEL if LLM_BACKEND == "local" else PLAN_MODEL
-
-
-# ── Cache key ─────────────────────────────────────────────────────────────────
-
-def plan_key_from_goal(goal: dict) -> str:
+# ── Which model to use per tier ──────────────────────────────────────────────
+def _get_model_for_tier(tier: str) -> str:
     """
-    Derive a deterministic cache key from the goal dict.
-    sort_keys=True ensures the same goal with different key ordering hashes identically.
+    Maps the router's tier decision to active Fireworks Serverless models.
     """
-    canonical = json.dumps(goal, sort_keys=True)
-    return hash_key(canonical)
+    if tier == "local":
+        return LOCAL_MODEL
+    elif tier == "small":
+        return "accounts/fireworks/models/llama-v3p2-3b-instruct"
+    elif tier == "medium":
+        return "accounts/fireworks/models/deepseek-v3p1"
+    elif tier == "large":
+        return "accounts/fireworks/models/glm-5p2"
+    
+    # Ensure you return GOAL_MODEL in goal_understanding.py 
+    # and PLAN_MODEL in task_planning.py for the fallback!
+    return PLAN_MODEL
 
 
 # ── System prompt ─────────────────────────────────────────────────────────────
@@ -67,96 +64,42 @@ Rules:
 - 'estimated_effort': S=hours, M=1-2 days, L=3-5 days, XL=week+"""
 
 
-# ── Phase 4 — exact cache only ────────────────────────────────────────────────
+# ── Execution ─────────────────────────────────────────────────────────────────
 
-def plan_tasks(goal: dict, retry: bool = True) -> dict:
+def plan_tasks_with_semantic(goal: dict, tier: str = "local", retry: bool = True) -> dict:
     """
-    Exact cache only. Use plan_tasks_with_semantic for the full pipeline.
-
-    Returns:
-        {"tasks": dict, "cache_hit": "exact"|"none", "tokens_used": int}
+    Executes the LLM call using the model tier determined by the RoutingEngine.
+    Includes an automatic retry if the generated task graph has cyclical dependencies.
     """
-    key = plan_key_from_goal(goal)
+    target_model = _get_model_for_tier(tier)
+    print(f"[Agent 2] Executing Task Planning on Tier: {tier.upper()} | Model: {target_model}")
+    
+    goal_text = json.dumps(goal)
+    
+    # 1. First attempt at DAG generation
+    result, usage = call_llm(tier, target_model, PLAN_SYSTEM_PROMPT, goal_text)
 
-    cached = get_cached(PLAN_COLLECTION, key)
-    if cached:
-        return {"tasks": cached["tasks_json"], "cache_hit": "exact", "tokens_used": 0}
-
-    goal_str = json.dumps(goal)
-    result, usage = call_llm(LLM_BACKEND, _model(), PLAN_SYSTEM_PROMPT, goal_str)
-
+    # 2. Validation and Self-Healing
     try:
         validate_task_graph(result)
     except ValueError as e:
         if retry:
-            corrective = (
-                goal_str
-                + f"\n\nYour previous attempt was invalid: {e}\n"
-                "Fix the issues and return corrected JSON."
-            )
-            result, usage2 = call_llm(LLM_BACKEND, _model(), PLAN_SYSTEM_PROMPT, corrective)
-            validate_task_graph(result)
-            usage["total_tokens"] = (
-                usage.get("total_tokens", 0) + usage2.get("total_tokens", 0)
-            )
-        else:
-            raise
-
-    set_cached(PLAN_COLLECTION, key, {"goal_json": goal, "tasks_json": result})
-    return {"tasks": result, "cache_hit": "none", "tokens_used": usage.get("total_tokens", 0)}
-
-
-# ── Phase 5 — exact → semantic → LLM ─────────────────────────────────────────
-
-def plan_tasks_with_semantic(goal: dict, retry: bool = True) -> dict:
-    """
-    Full cache chain: exact → semantic → LLM fallback.
-
-    Returns:
-        {"tasks": dict, "cache_hit": "exact"|"semantic(x.xx)"|"none", "tokens_used": int}
-    """
-    key = plan_key_from_goal(goal)
-
-    # 1. Exact cache hit
-    cached = get_cached(PLAN_COLLECTION, key)
-    if cached:
-        return {"tasks": cached["tasks_json"], "cache_hit": "exact", "tokens_used": 0}
-
-    # 2. Semantic cache hit
-    goal_text = json.dumps(goal, sort_keys=True)
-    semantic_match, score = semantic_lookup(PLAN_COLLECTION, goal_text)
-    if semantic_match:
-        return {
-            "tasks": semantic_match["tasks_json"],
-            "cache_hit": f"semantic({score:.2f})",
-            "tokens_used": 0,
-        }
-
-    # 3. LLM call — local Ollama or Fireworks cloud per LLM_BACKEND
-    result, usage = call_llm(LLM_BACKEND, _model(), PLAN_SYSTEM_PROMPT, goal_text)
-
-    try:
-        validate_task_graph(result)
-    except ValueError as e:
-        if retry:
+            print(f"[Agent 2] DAG Validation failed: {e}. Executing self-healing retry...")
             corrective = (
                 goal_text
                 + f"\n\nYour previous attempt was invalid: {e}\n"
                 "Fix the issues and return corrected JSON."
             )
-            result, usage2 = call_llm(LLM_BACKEND, _model(), PLAN_SYSTEM_PROMPT, corrective)
+            # Re-run with the corrective prompt
+            result, usage2 = call_llm(tier, target_model, PLAN_SYSTEM_PROMPT, corrective)
             validate_task_graph(result)
-            usage["total_tokens"] = (
-                usage.get("total_tokens", 0) + usage2.get("total_tokens", 0)
-            )
+            
+            # Combine token usage from both attempts
+            usage["total_tokens"] = usage.get("total_tokens", 0) + usage2.get("total_tokens", 0)
         else:
             raise
 
-    # Store with embedding for semantic lookup
-    embedding = get_embedding(normalize(goal_text))
-    set_cached(
-        PLAN_COLLECTION, key,
-        {"goal_json": goal, "tasks_json": result},
-        embedding=embedding,
-    )
-    return {"tasks": result, "cache_hit": "none", "tokens_used": usage.get("total_tokens", 0)}
+    return {
+        "tasks": result,
+        "tokens_used": usage.get("total_tokens", 0)
+    }

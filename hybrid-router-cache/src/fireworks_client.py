@@ -51,22 +51,21 @@ def call_llm(
     max_retries: int = DEFAULT_MAX_RETRIES,
 ) -> tuple[dict, dict]:
     """
-    Route a chat call to the right backend.
+    Route a chat call to the right backend based on dynamically calculated tier.
 
     Args:
-        tier:  "local" (Ollama) or "fireworks" (cloud). Pass LLM_BACKEND from config
-               to always follow the .env setting.
-        model: model identifier matching the tier (LOCAL_MODEL or GOAL_MODEL/PLAN_MODEL).
+        tier:  "local", "small", "medium", or "large".
+        model: model identifier mapped by the agent.
 
     Returns:
         (parsed_response: dict, usage: dict)
     """
     if tier == "local":
         return call_ollama_chat(model, system_prompt, user_prompt, temperature, max_retries)
-    elif tier == "fireworks":
+    elif tier in ["small", "medium", "large", "fireworks"]:
         return call_fireworks_chat(model, system_prompt, user_prompt, temperature, max_retries)
     else:
-        raise ValueError(f"Unknown LLM tier '{tier}'. Use 'local' or 'fireworks'.")
+        raise ValueError(f"Unknown LLM tier '{tier}'. Use 'local', 'small', 'medium', or 'large'.")
 
 
 # ─────────────────────────────────────────────────────────────────────────────

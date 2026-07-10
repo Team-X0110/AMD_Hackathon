@@ -1,47 +1,38 @@
-# .gitignore for hybrid-router-cache
-
-# ── Secrets — NEVER commit these ──────────────────────────────────────────────
+# ── Environment & Secrets (NEVER COMMIT) ──────────────────────────────────────
 .env
-firebase-key.json
-*.json.key
+*.json
+!*.json.key  # Keep key files if needed, or ignore all *.json if they are all secrets
+amd-hackathon-*.json
 
-# ── Python ────────────────────────────────────────────────────────────────────
+# ── Python & Environments ─────────────────────────────────────────────────────
 __pycache__/
 *.py[cod]
+*$py.class
 *.pyo
+venv/
+.venv/
+env/
+.env/
+ENV/
 .Python
 *.egg-info/
 dist/
 build/
 .eggs/
 *.egg
-pip-wheel-metadata/
 
-# ── Virtual environments ──────────────────────────────────────────────────────
-venv/
-.venv/
-env/
-.env/
-ENV/
+# ── IDE & System ──────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
 
-# ── Logs ─────────────────────────────────────────────────────────────────────
+# ── Project Specifics ─────────────────────────────────────────────────────────
+# Ignore local vector caches or specific log files
+.cache/
+cache/
 logs/*.jsonl
-
-# ── Testing ───────────────────────────────────────────────────────────────────
 .pytest_cache/
 .coverage
 htmlcov/
 *.xml
-
-# ── IDE ───────────────────────────────────────────────────────────────────────
-.vscode/
-.idea/
-*.sublime-project
-*.sublime-workspace
-
-# ── macOS ─────────────────────────────────────────────────────────────────────
-.DS_Store
-
-.env
-amd-hackathon-*.json
-firebase-key.json

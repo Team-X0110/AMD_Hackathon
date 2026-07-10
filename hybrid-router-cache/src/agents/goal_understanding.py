@@ -1,26 +1,33 @@
 """
 agents/goal_understanding.py — Goal Understanding Agent.
 
-Runs fully locally via Ollama (llama3.1:8b) right now.
-To switch to Fireworks cloud: set LLM_BACKEND=fireworks in .env — zero code change.
-
-Cache layers (exact → semantic → LLM):
-  1. Exact cache  — SHA-256 hash match → 0 tokens, instant
-  2. Semantic     — cosine similarity on embeddings → 0 tokens
-  3. LLM fallback — calls Ollama or Fireworks depending on LLM_BACKEND
+Cache handling has been moved to the top-level Routing Engine in pipeline.py.
+This agent is now a pure execution module that receives a dynamically routed 
+model tier and returns a validated structured goal.
 """
 from __future__ import annotations
 
-from src.config import LLM_BACKEND, LOCAL_MODEL, GOAL_MODEL, GOAL_COLLECTION
-from src.fireworks_client import call_llm, get_embedding
-from src.cache.exact_cache import normalize, hash_key, get_cached, set_cached
-from src.cache.semantic_cache import semantic_lookup
+from src.config import LOCAL_MODEL, GOAL_MODEL
+from src.fireworks_client import call_llm
 from src.validators import validate_goal_schema
 
-
-# ── Which model to use per backend ────────────────────────────────────────────
-def _model() -> str:
-    return LOCAL_MODEL if LLM_BACKEND == "local" else GOAL_MODEL
+# ── Which model to use per tier ──────────────────────────────────────────────
+def _get_model_for_tier(tier: str) -> str:
+    """
+    Maps the router's tier decision to active Fireworks Serverless models.
+    """
+    if tier == "local":
+        return LOCAL_MODEL
+    elif tier == "small":
+        return "accounts/fireworks/models/llama-v3p2-3b-instruct"
+    elif tier == "medium":
+        return "accounts/fireworks/models/deepseek-v3p1"
+    elif tier == "large":
+        return "accounts/fireworks/models/glm-5p2"
+    
+    # Ensure you return GOAL_MODEL in goal_understanding.py 
+    # and PLAN_MODEL in task_planning.py for the fallback!
+    return GOAL_MODEL
 
 
 # ── System prompt ─────────────────────────────────────────────────────────────
@@ -45,66 +52,22 @@ Rules:
 - If the input is ambiguous, make a reasonable inference and still return valid JSON."""
 
 
-# ── Phase 3 — exact cache only ────────────────────────────────────────────────
+# ── Execution ─────────────────────────────────────────────────────────────────
 
-def understand_goal(user_prompt: str) -> dict:
+def understand_goal_with_semantic(user_prompt: str, tier: str = "local") -> dict:
     """
-    Exact cache only. Use understand_goal_with_semantic for the full pipeline.
-
-    Returns:
-        {"goal": dict, "cache_hit": "exact"|"none", "tokens_used": int}
+    Executes the LLM call using the model tier determined by the RoutingEngine.
     """
-    key = hash_key(user_prompt)
-
-    cached = get_cached(GOAL_COLLECTION, key)
-    if cached:
-        return {"goal": cached["goal_json"], "cache_hit": "exact", "tokens_used": 0}
-
-    result, usage = call_llm(LLM_BACKEND, _model(), GOAL_SYSTEM_PROMPT, user_prompt)
+    target_model = _get_model_for_tier(tier)
+    print(f"[Agent 1] Executing Goal Understanding on Tier: {tier.upper()} | Model: {target_model}")
+    
+    # Call the LLM
+    result, usage = call_llm(tier, target_model, GOAL_SYSTEM_PROMPT, user_prompt)
+    
+    # Ensure the output matches our expected schema before proceeding
     validate_goal_schema(result)
 
-    set_cached(
-        GOAL_COLLECTION, key,
-        {"normalized_prompt": normalize(user_prompt), "goal_json": result},
-        embedding=None,
-    )
-    return {"goal": result, "cache_hit": "none", "tokens_used": usage.get("total_tokens", 0)}
-
-
-# ── Phase 5 — exact → semantic → LLM ─────────────────────────────────────────
-
-def understand_goal_with_semantic(user_prompt: str) -> dict:
-    """
-    Full cache chain: exact → semantic → LLM fallback.
-
-    Returns:
-        {"goal": dict, "cache_hit": "exact"|"semantic(x.xx)"|"none", "tokens_used": int}
-    """
-    key = hash_key(user_prompt)
-
-    # 1. Exact cache hit
-    cached = get_cached(GOAL_COLLECTION, key)
-    if cached:
-        return {"goal": cached["goal_json"], "cache_hit": "exact", "tokens_used": 0}
-
-    # 2. Semantic cache hit
-    semantic_match, score = semantic_lookup(GOAL_COLLECTION, user_prompt)
-    if semantic_match:
-        return {
-            "goal": semantic_match["goal_json"],
-            "cache_hit": f"semantic({score:.2f})",
-            "tokens_used": 0,
-        }
-
-    # 3. LLM call — local Ollama or Fireworks cloud per LLM_BACKEND
-    result, usage = call_llm(LLM_BACKEND, _model(), GOAL_SYSTEM_PROMPT, user_prompt)
-    validate_goal_schema(result)
-
-    # Store with embedding so future paraphrases hit the semantic cache
-    embedding = get_embedding(normalize(user_prompt))
-    set_cached(
-        GOAL_COLLECTION, key,
-        {"normalized_prompt": normalize(user_prompt), "goal_json": result},
-        embedding=embedding,
-    )
-    return {"goal": result, "cache_hit": "none", "tokens_used": usage.get("total_tokens", 0)}
+    return {
+        "goal": result,
+        "tokens_used": usage.get("total_tokens", 0)
+    }

@@ -1,14 +1,8 @@
-"""cache/__init__.py — Public re-exports for the cache layer."""
-from src.cache.firestore_client import get_db
-from src.cache.exact_cache import normalize, hash_key, get_cached, set_cached
-from src.cache.semantic_cache import cosine_sim, semantic_lookup
+"""agents/__init__.py — Public re-exports for the agent layer."""
+from src.agents.goal_understanding import understand_goal_with_semantic
+from src.agents.task_planning import plan_tasks_with_semantic
 
 __all__ = [
-    "get_db",
-    "normalize",
-    "hash_key",
-    "get_cached",
-    "set_cached",
-    "cosine_sim",
-    "semantic_lookup",
+    "understand_goal_with_semantic",
+    "plan_tasks_with_semantic",
 ]

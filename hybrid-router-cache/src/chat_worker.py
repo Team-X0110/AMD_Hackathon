@@ -91,6 +91,12 @@ def handle_message(event):
 def main():
     print("Starting AMD Chat Worker...")
     try:
+        # ---> ADD THIS IMPORT AND SYNC CALL <---
+        from src.cache.semantic_cache import sync_from_firebase
+        print("Initializing Local Semantic Cache...")
+        sync_from_firebase("semantic_cache")
+        # ---------------------------------------
+
         db = get_db()
         messages_ref = db.child("messages")
         print("Listening for new messages on /messages...")
@@ -107,6 +113,6 @@ def main():
             
     except Exception as e:
         print(f"Failed to start worker: {e}")
-
+    
 if __name__ == "__main__":
     main()
