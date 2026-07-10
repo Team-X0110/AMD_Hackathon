@@ -1,0 +1,140 @@
+# =============================================================================
+# Reflection Agent Configuration
+# AMD Hackathon — Module 3.7
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# RETRY POLICY
+# Local retries are exhausted first; Fireworks retries are a last resort.
+# -----------------------------------------------------------------------------
+retry_policy:
+  max_total_retries:       4     # Absolute ceiling across all strategies + models
+  max_local_retries:       2     # Retries on Ollama before escalating to Fireworks
+  max_fireworks_retries:   2     # Retries on any Fireworks tier before giving up
+  retry_backoff_seconds:   0.5   # Initial wait; doubles each retry (exponential)
+  backoff_multiplier:      2.0
+  max_backoff_seconds:     8.0
+
+# -----------------------------------------------------------------------------
+# FAILURE CATEGORY → REFLECTION ACTION MAP
+# primary_action: tried first on failure
+# fallback_action: tried if primary still fails after max_retries_before_fallback
+# Actions:
+#   RETRY_SAME_COT        — retry same model with chain-of-thought prefix
+#   RETRY_SAME_GROUNDING  — retry with explicit grounding/factuality instruction
+#   RETRY_SAME_FORMAT     — retry with strict format template appended
+#   RETRY_SAME_SCHEMA     — retry with schema + example injected
+#   RETRY_WITH_CONTEXT    — retry with additional_context injected
+#   ABORT                 — stop immediately, return error to caller
+#   RETRY_TOOL_SIMPLIFY   — retry with simplified tool schema
+#   ESCALATE              — move to next tier model
+#   RETRY_CODING_MODEL    — escalate specifically to highest coding_score model
+#   ESCALATE_AFTER_RETRY  — one local retry then escalate
+# -----------------------------------------------------------------------------
+failure_action_map:
+  INSUFFICIENT_REASONING:
+    primary_action:              RETRY_SAME_COT
+    fallback_action:             ESCALATE
+    max_retries_before_fallback: 1
+
+  HALLUCINATION:
+    primary_action:              RETRY_SAME_GROUNDING
+    fallback_action:             ESCALATE
+    max_retries_before_fallback: 1
+
+  FORMATTING:
+    primary_action:              RETRY_SAME_FORMAT
+    fallback_action:             RETRY_SAME_FORMAT
+    max_retries_before_fallback: 2
+
+  INCORRECT_SCHEMA:
+    primary_action:              RETRY_SAME_SCHEMA
+    fallback_action:             ESCALATE
+    max_retries_before_fallback: 1
+
+  MISSING_INFORMATION:
+    primary_action:              RETRY_WITH_CONTEXT
+    fallback_action:             ESCALATE
+    max_retries_before_fallback: 1
+
+  UNSAFE_OUTPUT:
+    primary_action:              ABORT
+    fallback_action:             ABORT
+    max_retries_before_fallback: 0
+
+  TOOL_FAILURE:
+    primary_action:              RETRY_TOOL_SIMPLIFY
+    fallback_action:             ESCALATE
+    max_retries_before_fallback: 1
+
+  LOW_CONFIDENCE:
+    primary_action:              ESCALATE
+    fallback_action:             ABORT
+    max_retries_before_fallback: 1
+
+  POOR_CODE_QUALITY:
+    primary_action:              RETRY_CODING_MODEL
+    fallback_action:             ESCALATE
+    max_retries_before_fallback: 1
+
+  EXECUTION_FAILURE:
+    primary_action:              ESCALATE_AFTER_RETRY
+    fallback_action:             ABORT
+    max_retries_before_fallback: 1
+
+  UNKNOWN:
+    primary_action:              ESCALATE
+    fallback_action:             ABORT
+    max_retries_before_fallback: 1
+
+# -----------------------------------------------------------------------------
+# PROMPT IMPROVEMENT TEMPLATES
+# Used by prompt_improver.py to patch the user prompt before retry.
+# {placeholders} are filled at runtime by PromptImprover.
+# -----------------------------------------------------------------------------
+prompt_improvement:
+  cot_prefix: |
+    Think step by step. Break down the problem into smaller parts before answering.
+    Show your reasoning explicitly before giving your final answer.
+
+  grounding_prefix: |
+    Answer ONLY based on facts you are certain about.
+    If you are unsure about any fact, explicitly state "I don't know" rather than guessing.
+    Do not fabricate information.
+
+  format_clarification_suffix: |
+    IMPORTANT: Your response MUST follow the exact format specified above.
+    Do not add any explanatory text outside the required structure.
+
+  context_injection_template: |
+    Additional context to help you answer accurately:
+    ---
+    {additional_context}
+    ---
+
+  schema_example_prefix: |
+    You MUST return a valid JSON object matching this exact schema:
+    {schema_json}
+    Example of a valid response:
+    {schema_example}
+
+  token_budget_instruction: |
+    Be concise. Limit your response to {max_tokens} tokens or fewer.
+
+  tool_simplification_suffix: |
+    Use only the most essential tool parameters.
+    Avoid optional fields unless strictly necessary.
+
+# -----------------------------------------------------------------------------
+# CODING MODEL SELECTION
+# When POOR_CODE_QUALITY is detected, prefer models with coding_score >= this.
+# -----------------------------------------------------------------------------
+coding_specialist_min_coding_score: 90
+
+# -----------------------------------------------------------------------------
+# ABORT CONDITIONS (immediate stop, no further retries)
+# -----------------------------------------------------------------------------
+abort_conditions:
+  unsafe_keywords_detected: true
+  max_retries_exceeded:      true
+  escalation_exhausted:      true

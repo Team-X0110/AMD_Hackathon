@@ -1,0 +1,176 @@
+================================================================================
+STANDARDIZED INTERFACE CONTRACT
+AMD Hackathon — Multi-Agent Orchestration Framework
+================================================================================
+This file documents the canonical output format for every upstream module that
+feeds into the Routing Engine (Module 3.5).  All upstream modules MUST emit
+objects conforming to these schemas.  The Python dataclasses in core/types.py
+are the authoritative implementation; this file is the human-readable contract.
+================================================================================
+
+────────────────────────────────────────────────────────────────────────────────
+MODULE: Feature Extractor  →  FeatureExtractionResult
+────────────────────────────────────────────────────────────────────────────────
+{
+  "request_id":                  string,   // UUID-v4, shared across the full pipeline
+  "prompt":                      string,   // Raw user prompt (unmodified)
+  "prompt_tokens_estimated":     integer,  // tiktoken or heuristic estimate
+  "detected_task_types":         [TaskType, ...],  // All applicable types detected
+  "primary_task_type":           TaskType, // Highest-confidence single type
+  "has_code_block":              boolean,
+  "has_image":                   boolean,
+  "has_structured_output_requirement": boolean,
+  "requires_citations":          boolean,
+  "expected_output_format":      string,   // "text" | "json" | "code" | "markdown" | "structured"
+  "detected_language":           string,   // ISO-639-1 e.g. "en", "zh"
+  "domain_keywords":             [string], // Top-N extracted keywords
+  "tool_schemas_provided":       boolean,
+  "extraction_timestamp":        string    // ISO-8601 UTC e.g. "2026-07-10T18:00:00Z"
+}
+
+TaskType enum values:
+  CODING | REASONING | VISION | GENERAL_CHAT | MATHEMATICS | SQL |
+  TRANSLATION | SUMMARIZATION | CLASSIFICATION | EXTRACTION |
+  DOCUMENT_QA | RAG | RESEARCH | CREATIVE_WRITING | TOOL_CALLING | AGENTS
+
+────────────────────────────────────────────────────────────────────────────────
+MODULE: Complexity / Domain / Risk Estimator  →  ComplexityEstimationResult
+────────────────────────────────────────────────────────────────────────────────
+{
+  "request_id":                  string,   // Same UUID as FeatureExtractionResult
+  "complexity_level":            ComplexityLevel,  // See enum below
+  "complexity_score":            float,    // [0.0, 1.0] continuous representation
+  "risk_level":                  RiskLevel,
+  "risk_score":                  float,    // [0.0, 1.0]
+  "requires_reasoning":          boolean,
+  "requires_vision":             boolean,
+  "requires_coding":             boolean,
+  "requires_long_context":       boolean,  // True if prompt > 16k tokens
+  "estimated_output_tokens":     integer,  // Predicted response length
+  "domain":                      string,   // e.g. "software_engineering", "science"
+  "estimation_timestamp":        string    // ISO-8601 UTC
+}
+
+ComplexityLevel enum values:  Simple | Medium | Complex | Expert
+RiskLevel enum values:        low | medium | high | critical
+
+Complexity score guidance:
+  Simple  → [0.00, 0.30)   e.g. "What is 2+2?", single-sentence answers
+  Medium  → [0.30, 0.60)   e.g. "Summarise this article"
+  Complex → [0.60, 0.85)   e.g. "Refactor this 200-line module"
+  Expert  → [0.85, 1.00]   e.g. "Prove this theorem", "Design a distributed system"
+
+────────────────────────────────────────────────────────────────────────────────
+MODULE: Confidence Engine  →  ConfidenceEngineResult
+────────────────────────────────────────────────────────────────────────────────
+{
+  "request_id":                  string,   // Same UUID
+  "overall_confidence":          float,    // [0.0, 1.0] — how confident we are any model
+                                           //   can satisfy this request
+  "local_can_handle":            boolean,  // True if Ollama is expected to succeed
+  "local_confidence":            float,    // [0.0, 1.0] — estimated local accuracy
+  "recommended_min_tier":        ExecutionTier, // Minimum acceptable tier
+  "force_escalate_to":           ExecutionTier | null,  // Override: skip to specific tier
+  "confidence_reasoning":        string,   // Human-readable explanation
+  "estimation_timestamp":        string    // ISO-8601 UTC
+}
+
+ExecutionTier enum values (ordered lowest→highest cost):
+  LOCAL | CHEAP | BALANCED | PREMIUM | ULTRA_PREMIUM
+
+────────────────────────────────────────────────────────────────────────────────
+COMBINED: RoutingContext  →  Input to Routing Engine (Module 3.5)
+────────────────────────────────────────────────────────────────────────────────
+{
+  "request_id":        string,
+  "features":          FeatureExtractionResult,
+  "complexity":        ComplexityEstimationResult,
+  "confidence":        ConfidenceEngineResult,
+  "original_messages": [{"role": string, "content": string | [...]}],
+                       // OpenAI-compatible message array; content may be a list
+                       // for multimodal (text + image_url) inputs
+  "additional_context": string | null,    // Extra context to inject on retry
+  "metadata":           {string: any}     // Free-form pass-through metadata
+}
+
+────────────────────────────────────────────────────────────────────────────────
+OUTPUT: RoutingDecision  →  What Routing Engine returns
+────────────────────────────────────────────────────────────────────────────────
+{
+  "request_id":                  string,
+  "selected_model_id":           string,   // Full Fireworks model ID or "local"
+  "selected_model_display_name": string,
+  "selected_tier":               ExecutionTier,
+  "is_local":                    boolean,
+  "utility_score":               float,    // Final weighted utility [0, 1]
+  "score_breakdown":             {component: score},
+  "all_candidates":              [CandidateScore, ...],  // All models ranked
+  "escalation_tier_attempted":   integer,  // 0 = initial, 1 = first escalation, …
+  "estimated_cost_usd":          float,    // Estimated cost for this request
+  "api_parameters":              {string: any},  // Ready-to-use API call params
+  "routing_rationale":           string,   // Human-readable decision explanation
+  "routing_timestamp":           string
+}
+
+────────────────────────────────────────────────────────────────────────────────
+OUTPUT: VerificationResult  →  What Local Verifier returns
+────────────────────────────────────────────────────────────────────────────────
+{
+  "request_id":                       string,
+  "status":                           VerificationStatus,  // PASSED|FAILED|PARTIAL|SKIPPED
+  "overall_confidence":               float,
+  "overall_score":                    float,   // [0.0, 1.0]
+  "strategy_results":                 [StrategyResult, ...],
+  "failure_reasons":                  [string],
+  "recommended_escalation":           boolean,
+  "recommended_escalation_reason":    string | null,
+  "strategies_run":                   [string],
+  "strategies_skipped":               [string],
+  "verification_timestamp":           string,
+  "model_id_verified":                string
+}
+
+────────────────────────────────────────────────────────────────────────────────
+OUTPUT: ReflectionResult  →  What Reflection Agent returns
+────────────────────────────────────────────────────────────────────────────────
+{
+  "request_id":                  string,
+  "succeeded":                   boolean,
+  "final_response":              string | null,
+  "final_model_id":              string,
+  "final_verification_result":   VerificationResult | null,
+  "total_retries":               integer,
+  "total_escalations":           integer,
+  "retry_history":               [RetryAttempt, ...],
+  "abort_reason":                string | null,
+  "total_tokens_used":           integer,
+  "total_cost_usd":              float,
+  "total_latency_ms":            float,
+  "reflection_timestamp":        string
+}
+
+================================================================================
+DESIGN NOTES
+================================================================================
+1. request_id flows unmodified through ALL modules — it is the correlation key
+   in every telemetry record and log line.
+
+2. All timestamps MUST be ISO-8601 UTC strings (datetime.utcnow().isoformat()+"Z").
+
+3. All float scores are normalised to [0.0, 1.0] BEFORE being stored in any
+   output dataclass.  Raw model scores (e.g. 0–100 in models.json) are
+   normalised internally by model_registry.py.
+
+4. original_messages uses the OpenAI chat completions message format verbatim
+   so it can be passed directly to either the Ollama or Fireworks API with
+   minimal transformation.
+
+5. estimated_output_tokens in ComplexityEstimationResult is used by the Routing
+   Engine to estimate dollar cost BEFORE the call is made, enabling cost-aware
+   routing without a dry-run API call.
+
+6. force_escalate_to overrides all tier logic.  If set, the Routing Engine
+   skips LOCAL through the tier BELOW the forced tier.  This is the only
+   legitimate way for the Confidence Engine to demand a specific model class.
+
+================================================================================

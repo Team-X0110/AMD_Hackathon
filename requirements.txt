@@ -1,0 +1,34 @@
+# AMD Hackathon — Python Dependencies
+# Python 3.11+ required
+# Install: pip install -r requirements.txt
+
+# ── HTTP / API ──────────────────────────────────────────────
+httpx>=0.27.0                # Async HTTP client for Ollama + Fireworks calls
+fireworks-ai>=0.15.0         # Official Fireworks AI SDK (OpenAI-compatible)
+openai>=1.40.0               # Used as OpenAI-compat client for Fireworks endpoint
+
+# ── Configuration ───────────────────────────────────────────
+pyyaml>=6.0.2                # YAML config loading (routing_config.yaml etc.)
+python-dotenv>=1.0.1         # .env file loading
+
+# ── Validation & Schema ─────────────────────────────────────
+pydantic>=2.7.0              # Schema validation in schema_validator strategy
+jsonschema>=4.22.0           # JSON Schema validation fallback
+
+# ── Code Analysis ───────────────────────────────────────────
+# ast is stdlib — no install needed
+pygments>=2.18.0             # Language detection for code_validator
+
+# ── Text / NLP Utilities ────────────────────────────────────
+tiktoken>=0.7.0              # Token counting for prompt_tokens_estimated
+
+# ── Logging & Telemetry ─────────────────────────────────────
+structlog>=24.2.0            # Structured logging throughout all modules
+
+# ── Testing ─────────────────────────────────────────────────
+pytest>=8.2.0
+pytest-asyncio>=0.23.0
+pytest-mock>=3.14.0
+
+# ── Typing helpers ──────────────────────────────────────────
+typing-extensions>=4.12.0   # Used for Python 3.11 compatibility shims
