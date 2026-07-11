@@ -71,4 +71,4 @@ MAX_TASKS_PER_PLAN: int = 15
 DEFAULT_TEMPERATURE: float = 0.2
 DEFAULT_MAX_RETRIES: int = 2
 REQUEST_TIMEOUT_LOCAL: int = 120   # Ollama on CPU can be slow — give it 2 min
-REQUEST_TIMEOUT_CLOUD: int = 20    # Fireworks cloud calls are fast
+REQUEST_TIMEOUT_CLOUD: int = 90    # Fireworks cloud calls are fast

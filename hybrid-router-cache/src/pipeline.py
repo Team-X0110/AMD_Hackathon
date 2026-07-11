@@ -114,7 +114,7 @@ def _log_run(
     # ── Firestore ──────────────────────────────────────────────────────────────
     try:
         firestore_record = {**record, "timestamp": fs.SERVER_TIMESTAMP}
-        get_db().collection(RUNS_COLLECTION).add(firestore_record)
+        get_db().child(RUNS_COLLECTION).push(firestore_record)
     except Exception as exc:
         print(f"[pipeline] Warning: Firestore log failed: {exc}")
 

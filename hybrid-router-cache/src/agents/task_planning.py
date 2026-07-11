@@ -21,15 +21,11 @@ def _get_model_for_tier(tier: str) -> str:
     """
     if tier == "local":
         return LOCAL_MODEL
-    elif tier == "small":
-        return "accounts/fireworks/models/llama-v3p2-3b-instruct"
-    elif tier == "medium":
-        return "accounts/fireworks/models/deepseek-v3p1"
-    elif tier == "large":
-        return "accounts/fireworks/models/glm-5p2"
+    elif tier in ["small", "medium", "large"]:
+        # The powerhouse model your API key has explicit access to
+        return "accounts/fireworks/models/deepseek-v4-pro"
     
-    # Ensure you return GOAL_MODEL in goal_understanding.py 
-    # and PLAN_MODEL in task_planning.py for the fallback!
+    # Keep return GOAL_MODEL here (or PLAN_MODEL in task_planning.py)
     return PLAN_MODEL
 
 

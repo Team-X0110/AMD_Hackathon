@@ -37,7 +37,7 @@ class RoutingEngine:
         complexity = min(complexity, 10)
 
         # -----------------------------------------
-        # Confidence Engine: Aggressively favor LOCAL
+        # Confidence Engine: Dynamic Routing
         # -----------------------------------------
         selected_tier = "local" # Default to 0 tokens
         
