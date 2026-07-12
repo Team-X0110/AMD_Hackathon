@@ -11,8 +11,8 @@ from src.config import PLAN_COLLECTION
 from src.fireworks_client import get_embedding
 from src.cache.exact_cache import normalize, hash_key, get_cached, set_cached
 from src.cache.semantic_cache import semantic_lookup
-from src.routing.engine import get_routing_engine
-from src.validators import validate_task_graph
+from src.integration import build_routing_context, execute_with_reflection
+from core.types import TaskType
 
 
 def plan_key_from_goal(goal: dict) -> str:
@@ -51,16 +51,15 @@ Rules:
 
 
 def _run_plan_llm(goal_text: str, goal: dict) -> tuple[dict, int, int, list[dict]]:
-    engine = get_routing_engine()
-    result, token_usage, outcomes = engine.execute_with_escalation(
-        agent="plan",
-        text=goal_text,
-        system_prompt=PLAN_SYSTEM_PROMPT,
-        user_prompt=goal_text,
-        validate_fn=validate_task_graph,
-    )
-    routing = [o.model_dump() for o in outcomes]
-    return result, token_usage.total_tokens, token_usage.fireworks_tokens, routing
+    context = build_routing_context(goal_text, PLAN_SYSTEM_PROMPT, TaskType.REASONING, expected_output_format="json")
+    outcome = execute_with_reflection(context)
+    
+    result = outcome["result"]
+    total_tokens = outcome["tokens_used"]
+    fw_tokens = total_tokens if outcome["routing_metrics"]["routed_tier"] != "LOCAL" else 0
+    routing = [outcome["routing_metrics"]]
+    
+    return result, total_tokens, fw_tokens, routing
 
 
 def plan_tasks(goal: dict, retry: bool = True) -> dict:

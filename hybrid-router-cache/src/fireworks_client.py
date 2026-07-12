@@ -404,3 +404,59 @@ def get_embedding(
     return _get_embedding_fireworks(text, model, max_retries)
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Raw inference endpoint for Module 3.7 (Reflection Agent)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def call_inference_raw(
+    model_id: str,
+    api_params: dict,
+    is_local: bool,
+    max_retries: int = DEFAULT_MAX_RETRIES,
+) -> str:
+    """
+    Execute an LLM call using raw API params built by the Routing Engine.
+    Returns the string content of the response.
+    """
+    last_exc: Exception | None = None
+    url = OLLAMA_URL if is_local else CHAT_URL
+    timeout = REQUEST_TIMEOUT_LOCAL if is_local else REQUEST_TIMEOUT_CLOUD
+    headers = None if is_local else AUTH_HEADERS
+
+    if not is_local:
+        _require_fireworks_api_key()
+        
+    for attempt in range(max_retries + 1):
+        try:
+            resp = requests.post(url, headers=headers, json=api_params, timeout=timeout)
+            resp.raise_for_status()
+            body = resp.json()
+
+            if is_local:
+                return body["message"]["content"]
+            else:
+                return body["choices"][0]["message"]["content"]
+
+        except requests.exceptions.HTTPError as e:
+            status = e.response.status_code if e.response is not None else 0
+            if status in (429, 500, 502, 503, 504) and attempt < max_retries:
+                time.sleep(1.5 * (attempt + 1))
+                last_exc = e
+                continue
+            raise RuntimeError(f"HTTP {status}: {e}") from e
+        except requests.exceptions.ConnectionError as e:
+            if is_local:
+                raise RuntimeError("Cannot connect to Ollama. Make sure Ollama is running: `ollama serve`") from e
+            if attempt < max_retries:
+                time.sleep(1.5 * (attempt + 1))
+                last_exc = e
+                continue
+            raise RuntimeError(f"ConnectionError: {e}") from e
+        except (requests.RequestException, KeyError) as e:
+            if attempt < max_retries:
+                time.sleep(1.5 * (attempt + 1))
+                last_exc = e
+                continue
+            raise RuntimeError(f"Inference failed after {max_retries + 1} attempts: {e}") from e
+
+    raise RuntimeError(f"Inference failed: {last_exc}")

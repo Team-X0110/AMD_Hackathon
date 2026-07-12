@@ -62,8 +62,8 @@ def handle_message(event):
         # Format the response
         goal_routes = result.get("routing", {}).get("goal", [])
         plan_routes = result.get("routing", {}).get("plan", [])
-        goal_route = goal_routes[-1]["tier"] if goal_routes else "cache/local"
-        plan_route = plan_routes[-1]["tier"] if plan_routes else "cache/local"
+        goal_route = goal_routes[-1].get("tier", goal_routes[-1].get("routed_tier", "cache/local")) if goal_routes else "cache/local"
+        plan_route = plan_routes[-1].get("tier", plan_routes[-1].get("routed_tier", "cache/local")) if plan_routes else "cache/local"
 
         formatted_response = (
             f"**Goal Understood:**\n```json\n{json.dumps(result['goal'], indent=2)}\n```\n\n"

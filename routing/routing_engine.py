@@ -374,7 +374,7 @@ class RoutingEngine(IRoutingEngine):
 
     def _build_local_api_params(self, context: RoutingContext) -> Dict[str, Any]:
         """Build API params for an Ollama chat call."""
-        return {
+        params = {
             "model": self._local_model_name,
             "messages": context.original_messages,
             "stream": False,
@@ -383,6 +383,9 @@ class RoutingEngine(IRoutingEngine):
                 "num_predict": 2048,
             },
         }
+        if context.features.expected_output_format == "json":
+            params["format"] = "json"
+        return params
 
     def _build_local_profile(self) -> ModelProfile:
         """

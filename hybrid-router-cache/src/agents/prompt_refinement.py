@@ -6,8 +6,8 @@ to be clear, actionable, and formatted nicely for the downstream agents.
 """
 from __future__ import annotations
 
-from src.routing.engine import get_routing_engine
-from src.validators import validate_refinement_schema
+from src.integration import build_routing_context, execute_with_reflection
+from core.types import TaskType
 
 REFINEMENT_SYSTEM_PROMPT = """You are a Prompt Refinement Agent. 
 Your job is to take a raw user request and rewrite it to be clear, actionable, and free of typos. 
@@ -33,19 +33,17 @@ def refine_prompt(user_prompt: str) -> dict:
     Returns:
         {"refinement": dict, "tokens_used": int, "fireworks_tokens": int, "routing": list}
     """
-    engine = get_routing_engine()
-    result, token_usage, outcomes = engine.execute_with_escalation(
-        agent="refinement",
-        text=user_prompt,
-        system_prompt=REFINEMENT_SYSTEM_PROMPT,
-        user_prompt=user_prompt,
-        validate_fn=validate_refinement_schema,
-    )
-    routing = [o.model_dump() for o in outcomes]
+    context = build_routing_context(user_prompt, REFINEMENT_SYSTEM_PROMPT, TaskType.GENERAL_CHAT, expected_output_format="json")
+    outcome = execute_with_reflection(context)
+    
+    result = outcome["result"]
+    total_tokens = outcome["tokens_used"]
+    fw_tokens = total_tokens if outcome["routing_metrics"]["routed_tier"] != "LOCAL" else 0
+    routing = [outcome["routing_metrics"]]
     
     return {
         "refinement": result,
-        "tokens_used": token_usage.total_tokens,
-        "fireworks_tokens": token_usage.fireworks_tokens,
+        "tokens_used": total_tokens,
+        "fireworks_tokens": fw_tokens,
         "routing": routing,
     }

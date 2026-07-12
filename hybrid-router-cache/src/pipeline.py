@@ -20,7 +20,6 @@ from src.config import RUNS_COLLECTION
 # --- NEW ROUTER IMPORTS ---
 from src.cache.global_semantic_cache import semantic_lookup as global_semantic_lookup, add_to_local_cache
 from src.agents.feature_extractor import FeatureExtractor
-from src.agents.routing_engine import RoutingEngine
 
 # Local log file mirror
 LOG_PATH = Path(__file__).parent.parent / "logs" / "run_logs.jsonl"
@@ -28,7 +27,6 @@ logger = logging.getLogger(__name__)
 
 # Initialize singletons for the worker lifecycle to avoid overhead
 extractor = FeatureExtractor()
-router = RoutingEngine()
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
@@ -51,12 +49,7 @@ def run_pipeline(user_prompt: str) -> dict:
     # ── Phase 2: Feature Extraction ───────────────────────────────────────────
     print("🔍 Cache miss. Extracting features and calculating complexity...")
     features = extractor.extract(user_prompt)
-    routing_decision = router.evaluate(features)
-
-    tier = routing_decision["routed_tier"]
-    complexity = routing_decision["complexity_score"]
     print(f"📊 Features: {features}")
-    print(f"🧠 Routing Decision: Tier=[{tier.upper()}], Complexity=[{complexity}/10]")
 
     # ── Agent 1: Prompt Refinement ────────────────────────────────────────────
     print("📝 Refining user prompt...")
@@ -81,6 +74,11 @@ def run_pipeline(user_prompt: str) -> dict:
         + plan_result.get("fireworks_tokens", 0)
     )
     latency = round(time.perf_counter() - t0, 3)
+
+    routing_decision = goal_result.get("routing", [{}])[0] if goal_result.get("routing") else {"routed_tier": "LOCAL", "complexity_score": 0}
+    tier = routing_decision.get("routed_tier", "LOCAL")
+    complexity = routing_decision.get("complexity_score", 0)
+    print(f"🧠 Routing Decision: Tier=[{str(tier).upper()}], Complexity=[{complexity}/10]")
 
     final_response = {
         "refined_prompt": refined_user_prompt,

@@ -12,8 +12,8 @@ from src.config import GOAL_COLLECTION
 from src.fireworks_client import get_embedding
 from src.cache.exact_cache import normalize, hash_key, get_cached, set_cached
 from src.cache.semantic_cache import semantic_lookup
-from src.routing.engine import get_routing_engine
-from src.validators import validate_goal_schema
+from src.integration import build_routing_context, execute_with_reflection
+from core.types import TaskType
 
 
 GOAL_SYSTEM_PROMPT = """You are a Goal Understanding Agent. Analyze the user's request and return a JSON object with EXACTLY these keys:
@@ -38,16 +38,15 @@ Rules:
 
 def _run_goal_llm(user_prompt: str) -> tuple[dict, int, int, list[dict]]:
     """Execute routed LLM call. Returns goal, tokens_used, fireworks_tokens, routing."""
-    engine = get_routing_engine()
-    result, token_usage, outcomes = engine.execute_with_escalation(
-        agent="goal",
-        text=user_prompt,
-        system_prompt=GOAL_SYSTEM_PROMPT,
-        user_prompt=user_prompt,
-        validate_fn=validate_goal_schema,
-    )
-    routing = [o.model_dump() for o in outcomes]
-    return result, token_usage.total_tokens, token_usage.fireworks_tokens, routing
+    context = build_routing_context(user_prompt, GOAL_SYSTEM_PROMPT, TaskType.EXTRACTION, expected_output_format="json")
+    outcome = execute_with_reflection(context)
+    
+    result = outcome["result"]
+    total_tokens = outcome["tokens_used"]
+    fw_tokens = total_tokens if outcome["routing_metrics"]["routed_tier"] != "LOCAL" else 0
+    routing = [outcome["routing_metrics"]]
+    
+    return result, total_tokens, fw_tokens, routing
 
 
 def understand_goal(user_prompt: str) -> dict:
