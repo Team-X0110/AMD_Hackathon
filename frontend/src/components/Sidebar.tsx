@@ -84,10 +84,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeChatId, setActiveChatId 
 
       const newChat: Chat = {
         id: newChatId,
-        name: `Conversation #${chats.length + 1}`,
+        name: `Session ${chats.length + 1}`,
         createdBy: currentUser?.uid || 'anonymous',
         createdAt: Date.now(),
-        lastMessage: 'Chat created. Start sending messages!',
+        lastMessage: 'Session initialized.',
         lastMessageTime: Date.now(),
       };
 
@@ -113,7 +113,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeChatId, setActiveChatId 
   const handleDeleteChat = async (chatId: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!dbInstance) return;
-    if (confirm('Delete this conversation and all its messages?')) {
+    if (confirm('Terminate session and flush data?')) {
       try {
         await remove(ref(dbInstance, `chats/${chatId}`));
         await remove(ref(dbInstance, `messages/${chatId}`));
@@ -139,69 +139,68 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeChatId, setActiveChatId 
   );
 
   return (
-    <div className="w-80 h-full bg-white dark:bg-[#0c0d16] border-r border-slate-200 dark:border-white/5 flex flex-col shrink-0">
+    <div className="w-72 md:w-80 h-full bg-neutral-50 dark:bg-[#111111] border-r border-neutral-200 dark:border-neutral-900 flex flex-col shrink-0 font-sans transition-colors">
 
       {/* Header */}
-      <div className="p-4 border-b border-slate-200 dark:border-white/5">
+      <div className="px-5 pt-5 pb-4">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
-            <span className="w-8 h-8 rounded-lg bg-indigo-500/10 border border-indigo-500/25 flex items-center justify-center text-sm">
-              ✨
-            </span>
-            <span className="font-bold tracking-tight text-md bg-gradient-to-r from-indigo-500 to-fuchsia-500 bg-clip-text text-transparent">
+            <div className="w-5 h-5 bg-[#ED1C24] flex items-center justify-center font-bold text-white text-[10px]">A</div>
+            <span className="font-bold tracking-tight text-neutral-900 dark:text-white uppercase">
               AMDChat
             </span>
           </div>
 
-          <div className="flex items-center gap-1.5">
-            <span className="px-2 py-0.5 rounded-full bg-indigo-500/10 border border-indigo-500/25 text-[10px] font-semibold text-indigo-500 dark:text-indigo-400">
-              Realtime
+          <div className="flex items-center gap-2">
+            <span className="px-2 py-0.5 rounded-sm bg-neutral-200 dark:bg-neutral-800 text-[10px] font-bold text-neutral-600 dark:text-neutral-400 uppercase tracking-wider">
+              Local
             </span>
             {/* Theme Toggle */}
             <button
               onClick={toggleTheme}
-              className="w-7 h-7 rounded-lg border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-slate-900/50 hover:bg-slate-200 dark:hover:bg-slate-800 flex items-center justify-center text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-all cursor-pointer"
+              className="p-1.5 rounded-sm hover:bg-neutral-200 dark:hover:bg-neutral-800 text-neutral-500 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white transition-colors cursor-pointer"
               title={isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
             >
-              {isDark ? <Sun size={13} /> : <Moon size={13} />}
+              {isDark ? <Sun size={14} /> : <Moon size={14} />}
             </button>
           </div>
         </div>
 
         {/* Search */}
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" size={14} />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" size={14} />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search conversations..."
-            className="w-full text-xs pl-9 pr-3 py-2 rounded-lg border border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-slate-900/50 text-slate-700 dark:text-slate-200 placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:outline-none focus:border-indigo-400 dark:focus:border-indigo-500/40 focus:ring-1 focus:ring-indigo-400/40 dark:focus:ring-indigo-500/40 transition-all"
+            placeholder="Search sessions..."
+            className="w-full text-xs pl-9 pr-3 py-2 rounded-sm border border-neutral-300 dark:border-neutral-800 bg-white dark:bg-[#181818] text-neutral-900 dark:text-neutral-200 placeholder:text-neutral-400 dark:placeholder:text-neutral-600 focus:outline-none focus:border-[#ED1C24] dark:focus:border-[#ED1C24] transition-colors"
           />
         </div>
       </div>
 
       {/* New Chat Button */}
-      <div className="p-4 pb-2">
+      <div className="px-4 pb-2">
         <button
           onClick={handleCreateChat}
-          className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-indigo-600/90 to-fuchsia-600/90 hover:from-indigo-600 hover:to-fuchsia-600 text-white font-medium text-xs flex items-center justify-center gap-2 hover:scale-[1.01] active:scale-[0.99] transition-all shadow-md shadow-indigo-500/10 cursor-pointer"
+          className="w-full py-2 px-4 rounded-sm bg-white dark:bg-[#181818] border border-neutral-300 dark:border-neutral-800 hover:border-[#ED1C24] dark:hover:border-[#ED1C24] text-neutral-900 dark:text-white font-medium text-xs flex items-center justify-between transition-colors cursor-pointer"
         >
-          <Plus size={14} /> New Conversation
+          <span>New Session</span>
+          <Plus size={14} className="text-[#ED1C24]" />
         </button>
       </div>
 
       {/* Chats List */}
-      <div className="flex-1 overflow-y-auto px-2 py-2 space-y-0.5">
+      <div className="flex-1 overflow-y-auto pt-2 space-y-0.5 px-2">
         {loading ? (
-          <div className="flex flex-col items-center justify-center h-32 space-y-2">
-            <div className="w-5 h-5 rounded-full border-2 border-indigo-500/30 border-t-indigo-500 animate-spin"></div>
-            <span className="text-[10px] text-slate-400 dark:text-slate-500">Loading chats...</span>
+          <div className="flex flex-col items-center justify-center h-32 space-y-3">
+            <div className="w-4 h-4 rounded-sm border-2 border-neutral-300 dark:border-neutral-700 border-t-[#ED1C24] animate-spin"></div>
+            <span className="text-[10px] text-neutral-500 uppercase tracking-widest">Loading...</span>
           </div>
         ) : filteredChats.length === 0 ? (
           <div className="text-center py-8 px-4">
-            <MessageSquare className="mx-auto text-slate-300 dark:text-slate-600 mb-2" size={20} />
-            <p className="text-xs text-slate-400 dark:text-slate-500">No conversations found</p>
+            <MessageSquare className="mx-auto text-neutral-300 dark:text-neutral-700 mb-2" size={20} />
+            <p className="text-xs text-neutral-500">No active sessions</p>
           </div>
         ) : (
           filteredChats.map((chat) => {
@@ -212,17 +211,17 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeChatId, setActiveChatId 
               <div
                 key={chat.id}
                 onClick={() => !isEditing && setActiveChatId(chat.id)}
-                className={`group relative flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all border ${
+                className={`group relative flex items-center gap-3 p-2.5 cursor-pointer transition-colors ${
                   isActive
-                    ? 'bg-indigo-50 dark:bg-indigo-500/10 border-indigo-200 dark:border-indigo-500/20 text-indigo-900 dark:text-indigo-100'
-                    : 'border-transparent text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-slate-200'
+                    ? 'bg-neutral-200/50 dark:bg-[#181818] border-l-2 border-[#ED1C24] text-neutral-900 dark:text-white'
+                    : 'border-l-2 border-transparent text-neutral-600 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-900/50'
                 }`}
               >
-                {/* Avatar */}
-                <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-xs font-semibold ${
+                {/* Avatar / Initial */}
+                <div className={`w-7 h-7 rounded-sm flex items-center justify-center shrink-0 text-xs font-bold ${
                   isActive
-                    ? 'bg-indigo-100 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-500/30'
-                    : 'bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-white/5 text-slate-500 dark:text-slate-400'
+                    ? 'bg-[#ED1C24] text-white'
+                    : 'bg-neutral-200 dark:bg-neutral-800 text-neutral-500'
                 }`}>
                   {chat.name.charAt(0).toUpperCase()}
                 </div>
@@ -239,24 +238,24 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeChatId, setActiveChatId 
                           if (e.key === 'Enter') handleRenameChat(chat.id);
                           if (e.key === 'Escape') setEditingChatId(null);
                         }}
-                        className="w-full text-xs px-2 py-0.5 rounded border border-indigo-400 dark:border-indigo-500/40 bg-white dark:bg-slate-950 text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                        className="w-full text-xs px-2 py-0.5 rounded-sm border border-[#ED1C24] bg-white dark:bg-[#111111] text-neutral-900 dark:text-white focus:outline-none"
                         autoFocus
                       />
-                      <button onClick={() => handleRenameChat(chat.id)} className="text-emerald-500 hover:text-emerald-600 p-0.5 rounded cursor-pointer">
+                      <button onClick={() => handleRenameChat(chat.id)} className="text-green-600 hover:text-green-700 p-0.5 cursor-pointer">
                         <Check size={12} />
                       </button>
-                      <button onClick={() => setEditingChatId(null)} className="text-rose-400 hover:text-rose-500 p-0.5 rounded cursor-pointer">
+                      <button onClick={() => setEditingChatId(null)} className="text-red-500 hover:text-red-600 p-0.5 cursor-pointer">
                         <X size={12} />
                       </button>
                     </div>
                   ) : (
                     <>
-                      <div className="flex items-center justify-between mb-0.5">
-                        <span className="font-semibold text-xs truncate block text-slate-800 dark:text-slate-200">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="font-medium text-xs truncate block text-neutral-800 dark:text-neutral-200">
                           {chat.name}
                         </span>
                         {chat.lastMessageTime && (
-                          <span className="text-[9px] text-slate-400 dark:text-slate-500 whitespace-nowrap">
+                          <span className="text-[9px] text-neutral-400 dark:text-neutral-500 font-mono tracking-tighter">
                             {formatDistanceToNow(chat.lastMessageTime, { addSuffix: false })
                               .replace('about ', '').replace('less than a minute', 'now')
                               .replace(' minutes', 'm').replace(' minute', 'm')
@@ -265,7 +264,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeChatId, setActiveChatId 
                           </span>
                         )}
                       </div>
-                      <p className="text-[10px] text-slate-400 dark:text-slate-500 truncate">
+                      <p className="text-[10px] text-neutral-500 dark:text-neutral-600 truncate">
                         {chat.lastMessage}
                       </p>
                     </>
@@ -274,22 +273,22 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeChatId, setActiveChatId 
 
                 {/* Hover actions */}
                 {!isEditing && (
-                  <div className="absolute right-2 opacity-0 group-hover:opacity-100 flex items-center gap-1 transition-all">
+                  <div className="absolute right-2 opacity-0 group-hover:opacity-100 flex items-center gap-0.5 transition-opacity">
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
                         setEditingChatId(chat.id);
                         setEditChatName(chat.name);
                       }}
-                      className="p-1 rounded bg-white dark:bg-slate-950/80 hover:bg-slate-100 dark:hover:bg-slate-900 border border-slate-200 dark:border-white/5 hover:text-indigo-500 text-slate-400 transition-all cursor-pointer"
+                      className="p-1.5 rounded-sm bg-white dark:bg-neutral-800 hover:bg-neutral-100 dark:hover:bg-neutral-700 text-neutral-400 hover:text-neutral-900 dark:hover:text-white transition-colors cursor-pointer"
                     >
-                      <Edit2 size={10} />
+                      <Edit2 size={12} />
                     </button>
                     <button
                       onClick={(e) => handleDeleteChat(chat.id, e)}
-                      className="p-1 rounded bg-white dark:bg-slate-950/80 hover:bg-slate-100 dark:hover:bg-slate-900 border border-slate-200 dark:border-white/5 hover:text-rose-500 text-slate-400 transition-all cursor-pointer"
+                      className="p-1.5 rounded-sm bg-white dark:bg-neutral-800 hover:bg-red-50 dark:hover:bg-red-950/30 text-neutral-400 hover:text-red-600 dark:hover:text-red-400 transition-colors cursor-pointer"
                     >
-                      <Trash2 size={10} />
+                      <Trash2 size={12} />
                     </button>
                   </div>
                 )}
@@ -300,10 +299,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeChatId, setActiveChatId 
       </div>
 
       {/* User Profile Footer */}
-      <div className="p-4 border-t border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-[#0a0b12]">
+      <div className="p-4 border-t border-neutral-200 dark:border-neutral-900 bg-white dark:bg-[#181818]">
         {isEditingProfile ? (
           <div className="space-y-2">
-            <label className="block text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">Edit Display Name</label>
+            <label className="block text-[10px] font-bold uppercase tracking-widest text-neutral-500">Identity Alias</label>
             <div className="flex items-center gap-1.5">
               <input
                 type="text"
@@ -313,29 +312,29 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeChatId, setActiveChatId 
                   if (e.key === 'Enter') handleSaveProfile();
                   if (e.key === 'Escape') setIsEditingProfile(false);
                 }}
-                placeholder="Enter name..."
-                className="flex-1 text-xs px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-950 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-600 focus:outline-none focus:border-indigo-400 dark:focus:border-indigo-500/50"
+                placeholder="Alias..."
+                className="flex-1 text-xs px-2 py-1.5 rounded-sm border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-[#111111] text-neutral-900 dark:text-white focus:outline-none focus:border-[#ED1C24]"
                 autoFocus
               />
-              <button onClick={handleSaveProfile} className="p-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-500/20 hover:bg-indigo-100 dark:hover:bg-indigo-500/30 text-indigo-500 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-500/20 cursor-pointer">
+              <button onClick={handleSaveProfile} className="p-1.5 rounded-sm bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-500 hover:bg-green-100 dark:hover:bg-green-900/40 cursor-pointer transition-colors">
                 <CheckCircle2 size={14} />
               </button>
-              <button onClick={() => setIsEditingProfile(false)} className="p-1.5 rounded-lg bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-white/5 cursor-pointer">
+              <button onClick={() => setIsEditingProfile(false)} className="p-1.5 rounded-sm bg-neutral-100 dark:bg-neutral-800 text-neutral-500 dark:text-neutral-400 hover:bg-neutral-200 dark:hover:bg-neutral-700 cursor-pointer transition-colors">
                 <X size={14} />
               </button>
             </div>
           </div>
         ) : (
-          <div className="flex items-center gap-2.5 min-w-0">
+          <div className="flex items-center gap-3 min-w-0">
             {/* Avatar */}
-            <div className={`w-9 h-9 rounded-xl bg-gradient-to-tr ${profileData?.avatarColor || 'from-indigo-500 to-fuchsia-500'} flex items-center justify-center text-white text-xs font-bold shadow-md shadow-black/10 relative shrink-0`}>
+            <div className="w-8 h-8 rounded-sm bg-neutral-200 dark:bg-neutral-800 flex items-center justify-center text-neutral-600 dark:text-neutral-300 text-xs font-bold relative shrink-0">
               {profileData?.displayName?.charAt(0).toUpperCase() || 'U'}
-              <span className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-white dark:border-[#0c0d16]"></span>
+              <span className="absolute -bottom-1 -right-1 w-2.5 h-2.5 bg-green-500 border-2 border-white dark:border-[#181818] rounded-full"></span>
             </div>
 
             <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-1">
-                <span className="font-semibold text-xs text-slate-800 dark:text-slate-200 truncate max-w-[120px] block">
+              <div className="flex items-center gap-1.5">
+                <span className="font-semibold text-xs text-neutral-900 dark:text-white truncate block">
                   {profileData?.displayName}
                 </span>
                 <button
@@ -343,14 +342,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ activeChatId, setActiveChatId 
                     setIsEditingProfile(true);
                     setNewDisplayName(profileData?.displayName || '');
                   }}
-                  className="p-0.5 text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 transition-colors cursor-pointer"
-                  title="Edit Name"
+                  className="p-0.5 text-neutral-400 hover:text-neutral-900 dark:hover:text-white transition-colors cursor-pointer"
+                  title="Configure Alias"
                 >
-                  <Edit3 size={10} />
+                  <Edit3 size={12} />
                 </button>
               </div>
-              <span className="text-[9px] text-slate-400 dark:text-slate-500 truncate block">
-                Anonymous User
+              <span className="text-[9px] font-mono text-neutral-500 dark:text-neutral-600 truncate block">
+                ID: {currentUser?.uid?.substring(0, 8) || 'GUEST'}
               </span>
             </div>
           </div>
