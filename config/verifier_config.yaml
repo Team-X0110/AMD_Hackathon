@@ -1,0 +1,72 @@
+# =============================================================================
+# Verifier Configuration
+# AMD Hackathon — Module 3.6
+# =============================================================================
+
+strategies:
+  self_consistency:
+    enabled:               true
+    weight:                0.15
+    only_on_high_risk:     true
+    num_samples:           2
+    agreement_threshold:   0.75
+
+  schema_validator:
+    enabled:               true
+    weight:                0.20
+    run_if_formats:        ["json", "structured", "pydantic"]
+    strict_mode:           true
+
+  code_validator:
+    enabled:               true
+    weight:                0.18
+    run_if_task_types:     ["CODING"]
+    run_unit_tests:        false
+    syntax_check_languages: ["python", "javascript", "typescript", "sql", "bash"]
+    execution_timeout_seconds: 10
+
+  completeness_checker:
+    enabled:               true
+    weight:                0.15
+    min_response_chars:    20
+    max_response_chars:    50000
+    min_sentences:         1
+
+  hallucination_detector:
+    enabled:               true
+    weight:                0.15
+    repetition_ratio_threshold: 0.40
+    ngram_size:            4
+    contradiction_keywords:
+      - "as of my knowledge cutoff"
+      - "I believe but am not certain"
+      - "I'm not sure but"
+      - "this might be incorrect"
+
+  format_validator:
+    enabled:               true
+    weight:                0.10
+    max_length_multiplier: 3.0
+    min_length_fraction:   0.10
+
+  citation_validator:
+    enabled:               true
+    weight:                0.07
+    run_only_if_required:  true
+    min_citations:         1
+
+aggregation:
+  method:             "weighted_average"
+  pass_threshold:     0.65
+  partial_threshold:  0.45
+
+hard_minimums:
+  min_response_length:   5
+  max_response_length:   100000
+  must_not_be_empty:     true
+
+escalation_recommendation_threshold: 0.55
+
+token_minimization:
+  skip_self_consistency_for_risk: ["low", "medium"]
+  max_additional_calls_per_verify: 2

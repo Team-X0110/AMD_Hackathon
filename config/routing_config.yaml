@@ -1,0 +1,149 @@
+# =============================================================================
+# Routing Engine Configuration
+# AMD Hackathon — Module 3.5
+# All weights, thresholds, and policies live here — zero magic numbers in code.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# UTILITY SCORE WEIGHTS
+# Weights must sum to 1.0.
+# local_preference is handled as a separate additive bonus (see below).
+# -----------------------------------------------------------------------------
+utility_weights:
+  quality_score:       0.18   # routing_metadata.quality_score / 100
+  domain_match:        0.20   # agent_recommendations[task_type] / 10
+  reasoning_score:     0.12   # routing_metadata.reasoning_score / 100
+  coding_score:        0.10   # routing_metadata.coding_score / 100
+  vision_score:        0.05   # routing_metadata.vision_score / 100 (0 if no vision)
+  token_efficiency:    0.08   # routing_metadata.token_efficiency_score / 100
+  latency_score:       0.07   # derived from latency_class (see latency_class_scores)
+  cost_penalty:        0.10   # 1 - normalized_cost (cheaper = higher score)
+  confidence_match:    0.05   # 1 - |task_confidence - model_threshold|
+  history_factor:      0.05   # rolling success rate from telemetry
+
+# Local execution additive bonus applied BEFORE tier comparison.
+# Ensures Ollama is always chosen when it meets the minimum confidence bar.
+local_execution:
+  bonus:                      0.35   # Added to local utility score
+  min_confidence_threshold:   0.60   # Minimum task confidence to trust local
+  timeout_seconds:            30
+  max_retries_local:          2      # Local retries before escalation to CHEAP
+  local_model_env_key:        "LOCAL_MODEL"   # Read model name from .env
+  ollama_url_env_key:         "OLLAMA_URL"    # Read URL from .env
+
+# -----------------------------------------------------------------------------
+# ESCALATION TIERS (fixed order, never skip unless skip rules or force_escalate)
+# tier_label must match routing_metadata.routing_tier values in models.json.
+# -----------------------------------------------------------------------------
+escalation_tiers:
+  - tier:              LOCAL
+    order:             0
+    tier_label:        "Local"
+    cost_ceiling_usd:  0.0
+
+  - tier:              CHEAP
+    order:             1
+    tier_label:        "Cheap"
+    cost_ceiling_usd:  0.30
+
+  - tier:              BALANCED
+    order:             2
+    tier_label:        "Balanced"
+    cost_ceiling_usd:  0.60
+
+  - tier:              PREMIUM
+    order:             3
+    tier_label:        "Premium"
+    cost_ceiling_usd:  1.50
+
+  - tier:              ULTRA_PREMIUM
+    order:             4
+    tier_label:        "Ultra Premium"
+    cost_ceiling_usd:  9999.0
+
+# -----------------------------------------------------------------------------
+# TIER SKIP RULES — conditions under which a tier is bypassed entirely
+# -----------------------------------------------------------------------------
+tier_skip_rules:
+  skip_local_if_vision:           true   # Local Ollama has no vision capability
+  skip_cheap_if_expert:           true   # Expert tasks need ≥ BALANCED
+  skip_cheap_if_critical_risk:    true   # Critical risk skips to BALANCED minimum
+  skip_balanced_if_expert:        false  # BALANCED is acceptable for Expert with good models
+
+  # Minimum confidence engine score required per tier.
+  # If task overall_confidence < threshold, that tier is skipped.
+  min_confidence_per_tier:
+    LOCAL:        0.60
+    CHEAP:        0.50
+    BALANCED:     0.55
+    PREMIUM:      0.70
+    ULTRA_PREMIUM: 0.80
+
+# -----------------------------------------------------------------------------
+# COST NORMALISATION
+# Used to compute the cost_penalty component of utility score.
+# -----------------------------------------------------------------------------
+cost_normalization:
+  max_input_cost_per_million:   2.00   # Normalise input cost against this ceiling
+  max_output_cost_per_million:  5.00   # Normalise output cost against this ceiling
+  input_weight:                 0.40   # 40% input, 60% output in blended cost
+  output_weight:                0.60
+
+# -----------------------------------------------------------------------------
+# LATENCY CLASS → numeric score mapping
+# Values must match latency_class strings in models.json performance section.
+# -----------------------------------------------------------------------------
+latency_class_scores:
+  "Ultra Fast": 1.00
+  "Fast":       0.80
+  "Medium":     0.55
+  "Slow":       0.30
+  "Unknown":    0.50
+
+# -----------------------------------------------------------------------------
+# HISTORY TRACKING — rolling success rate per model
+# -----------------------------------------------------------------------------
+history:
+  window_size:              100    # Last N requests per model considered
+  min_samples_required:     5     # Minimum before history_factor is used
+  default_history_score:    0.75  # Assumed success rate with no data
+  telemetry_file_env_key:   "TELEMETRY_FILE"  # Path to telemetry JSONL
+
+# -----------------------------------------------------------------------------
+# CANDIDATE SELECTION
+# -----------------------------------------------------------------------------
+candidate_selection:
+  max_candidates:          8     # Score all models; limit logged candidates
+  min_utility_threshold:   0.10  # Discard models below this score entirely
+
+# -----------------------------------------------------------------------------
+# DOMAIN → agent_recommendations KEY MAPPING
+# Maps core.types.TaskType values to the key in models.json agent_recommendations.
+# -----------------------------------------------------------------------------
+task_type_to_recommendation_key:
+  CODING:          "coding"
+  REASONING:       "reasoning"
+  VISION:          "vision"
+  GENERAL_CHAT:    "general_chat"
+  MATHEMATICS:     "mathematics"
+  SQL:             "sql"
+  TRANSLATION:     "translation"
+  SUMMARIZATION:   "summarization"
+  CLASSIFICATION:  "classification"
+  EXTRACTION:      "extraction"
+  DOCUMENT_QA:     "document_qa"
+  RAG:             "rag"
+  RESEARCH:        "research"
+  CREATIVE_WRITING: "creative_writing"
+  TOOL_CALLING:    "tool_calling"
+  AGENTS:          "agents"
+
+# -----------------------------------------------------------------------------
+# TOKEN EFFICIENCY — token budget awareness
+# Routing engine uses these to prefer concise responses and cheaper calls.
+# -----------------------------------------------------------------------------
+token_awareness:
+  short_prompt_tokens:   256    # Prompts ≤ this are considered short
+  long_prompt_tokens:    4096   # Prompts ≥ this trigger long-context preference
+  short_output_tokens:   256    # Expected output ≤ this is considered short
+  long_output_tokens:    2048   # Expected output ≥ this prefers high max_tokens models
