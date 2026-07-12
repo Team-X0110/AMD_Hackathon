@@ -123,6 +123,7 @@ Local FAISS Semantic Cache (Task 3.1): Upgraded from O(N) database lookups to a 
 Feature Extraction (Task 3.2): Added pure Python static analysis to detect code blocks, JSON requirements, length constraints, and query domains before inference.
 Complexity Estimator (Task 3.3): System mathematically evaluates prompt complexity on a 1-10 scale based on extracted features.
 Dynamic Routing Engine (Task 3.4): System defaults to local execution (Ollama) for zero-cost operation and dynamically cloud-bursts to DeepSeek-V4-Pro for highly complex architectural tasks.
+Prompt Refinement (Task 3.5): Added a pre-processing LLM agent that intercepts raw, messy user prompts and autonomously corrects typos, resolves ambiguity, and re-formats them before they reach the core analysis pipeline.
 Hardened Execution: Upgraded cloud timeouts to 90s for massive JSON payload generation and optimized Firebase telemetry logging.
 Stack
 Component	Choice
@@ -156,6 +157,9 @@ User Prompt
 [FAISS Semantic Cache] ──hit (score ≥ 0.92)──► return cached JSON (0 tokens)
     │ miss
     ▼
+[Prompt Refinement] ──► rewrites messy queries, resolves ambiguity
+    │
+    ▼
 [Feature Extractor] ──► calculates length, domain, formatting needs
     │
     ▼
@@ -186,6 +190,7 @@ hybrid-router-cache/
 │   │   ├── firestore_client.py  # Singleton Firebase init
 │   │   ├── semantic_cache.py    # FAISS Embedding + cosine similarity lookup
 │   └── agents/
+│       ├── prompt_refinement.py   # Cleans and resolves prompt ambiguity
 │       ├── feature_extractor.py   # Analyzes prompt syntax/domain
 │       ├── routing_engine.py      # Evaluates complexity and assigns tier
 │       ├── goal_understanding.py  # Goal Understanding Agent

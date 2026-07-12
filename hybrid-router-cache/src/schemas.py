@@ -83,3 +83,20 @@ class PlanSchema(BaseModel):
     tasks: list[TaskSchema] = Field(min_length=1)
     execution_order: list[str]
     parallel_groups: list[list[str]]
+
+# ── Prompt Refinement Agent ───────────────────────────────────────────────────
+
+REFINEMENT_SCHEMA_KEYS = frozenset({
+    "refined_prompt",   # str — the polished, clear, and actionable prompt
+    "ambiguity_resolved", # bool — whether ambiguity was resolved or assumed
+    "changes_made",     # list — brief descriptions of changes made (can be empty)
+})
+
+class RefinedPromptSchema(BaseModel):
+    """Validated output from the Prompt Refinement agent."""
+
+    model_config = ConfigDict(extra="allow")
+
+    refined_prompt: str = Field(min_length=1)
+    ambiguity_resolved: bool
+    changes_made: list[str]

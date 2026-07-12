@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 from src.cache.firestore_client import get_db
 from src.agents.goal_understanding import understand_goal_with_semantic
 from src.agents.task_planning import plan_tasks_with_semantic
+from src.agents.prompt_refinement import refine_prompt
 from src.config import RUNS_COLLECTION
 
 # --- NEW ROUTER IMPORTS ---
@@ -57,30 +58,45 @@ def run_pipeline(user_prompt: str) -> dict:
     print(f"📊 Features: {features}")
     print(f"🧠 Routing Decision: Tier=[{tier.upper()}], Complexity=[{complexity}/10]")
 
-    # ── Agent 1: Goal Understanding ───────────────────────────────────────────
-    goal_result = understand_goal_with_semantic(user_prompt)
+    # ── Agent 1: Prompt Refinement ────────────────────────────────────────────
+    print("📝 Refining user prompt...")
+    refinement_result = refine_prompt(user_prompt)
+    refined_user_prompt = refinement_result["refinement"]["refined_prompt"]
+    print(f"✨ Refined Prompt: {refined_user_prompt}")
 
-    # ── Agent 2: Task Planning ────────────────────────────────────────────────
+    # ── Agent 2: Goal Understanding ───────────────────────────────────────────
+    goal_result = understand_goal_with_semantic(refined_user_prompt)
+
+    # ── Agent 3: Task Planning ────────────────────────────────────────────────
     plan_result = plan_tasks_with_semantic(goal_result["goal"])
 
-    total_tokens = goal_result["tokens_used"] + plan_result["tokens_used"]
-    fireworks_tokens = goal_result.get("fireworks_tokens", 0) + plan_result.get(
-        "fireworks_tokens", 0
+    total_tokens = (
+        refinement_result["tokens_used"]
+        + goal_result["tokens_used"]
+        + plan_result["tokens_used"]
+    )
+    fireworks_tokens = (
+        refinement_result.get("fireworks_tokens", 0)
+        + goal_result.get("fireworks_tokens", 0)
+        + plan_result.get("fireworks_tokens", 0)
     )
     latency = round(time.perf_counter() - t0, 3)
 
     final_response = {
+        "refined_prompt": refined_user_prompt,
         "goal": goal_result["goal"],
         "tasks": plan_result["tasks"],
         "cache_hits": {
             "goal": goal_result.get("cache_hit", "none"),
             "plan": plan_result.get("cache_hit", "none"),
         },
+        "refined_prompt_details": refinement_result["refinement"],
         "routing_metrics": routing_decision, # Send the brain's logic to the frontend!
         "tokens_used": total_tokens,
         "fireworks_tokens": fireworks_tokens,
         "latency_sec": latency,
         "routing": {
+            "refinement": refinement_result.get("routing", []),
             "goal": goal_result.get("routing", []),
             "plan": plan_result.get("routing", []),
         },
@@ -90,7 +106,7 @@ def run_pipeline(user_prompt: str) -> dict:
     add_to_local_cache(user_prompt, final_response)
 
     # ── Logging ───────────────────────────────────────────────────────────────
-    _log_run(user_prompt, goal_result, plan_result, total_tokens, fireworks_tokens, latency)
+    _log_run(user_prompt, refinement_result, goal_result, plan_result, total_tokens, fireworks_tokens, latency)
 
     return final_response
 
@@ -99,6 +115,7 @@ def run_pipeline(user_prompt: str) -> dict:
 
 def _log_run(
     prompt: str,
+    refinement_result: dict,
     goal_result: dict,
     plan_result: dict,
     tokens: int,
@@ -111,6 +128,7 @@ def _log_run(
         "plan_cache_hit": plan_result.get("cache_hit", "none"),
         "tokens_used": tokens,
         "fireworks_tokens": fireworks_tokens,
+        "refinement_routing": refinement_result.get("routing", []),
         "goal_routing": goal_result.get("routing", []),
         "plan_routing": plan_result.get("routing", []),
         "latency_sec": latency,

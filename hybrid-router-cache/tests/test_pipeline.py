@@ -20,6 +20,17 @@ sys.modules.setdefault("src.cache.global_semantic_cache", _stub_cache)
 
 import src.pipeline  # noqa: E402 — must be imported after stub so @patch can resolve it
 
+MOCK_REFINEMENT_RESULT = {
+    "refinement": {
+        "refined_prompt": "Refined prompt text",
+        "ambiguity_resolved": False,
+        "changes_made": []
+    },
+    "tokens_used": 100,
+    "fireworks_tokens": 0,
+    "routing": [{"tier": "local", "success": True}],
+}
+
 MOCK_GOAL_RESULT_NONE = {
     "goal": {
         "intent": "build an API",
@@ -55,14 +66,16 @@ MOCK_PLAN_RESULT_EXACT = {**MOCK_PLAN_RESULT_NONE, "cache_hit": "exact", "tokens
 @patch("src.pipeline.add_to_local_cache")
 @patch("src.pipeline.global_semantic_lookup", return_value=(None, 0.0))
 @patch("src.pipeline.plan_tasks_with_semantic", return_value=MOCK_PLAN_RESULT_NONE)
+@patch("src.pipeline.refine_prompt", return_value=MOCK_REFINEMENT_RESULT)
 @patch("src.pipeline.understand_goal_with_semantic", return_value=MOCK_GOAL_RESULT_NONE)
-def test_pipeline_cache_miss(mock_goal, mock_plan, mock_sem, mock_cache, mock_log):
+def test_pipeline_cache_miss(mock_goal, mock_refine, mock_plan, mock_sem, mock_cache, mock_log):
     """Cold start — both agents miss, tokens > 0."""
     from src.pipeline import run_pipeline
     result = run_pipeline("build a todo API")
-    assert result["tokens_used"] == 1200
+    assert result["tokens_used"] == 1300
     assert result["fireworks_tokens"] == 0
     assert "routing" in result
+    assert "refinement" in result["routing"]
     assert result["cache_hits"]["goal"] == "none"
     assert result["cache_hits"]["plan"] == "none"
     assert "latency_sec" in result
@@ -74,12 +87,13 @@ def test_pipeline_cache_miss(mock_goal, mock_plan, mock_sem, mock_cache, mock_lo
 @patch("src.pipeline.add_to_local_cache")
 @patch("src.pipeline.global_semantic_lookup", return_value=(None, 0.0))
 @patch("src.pipeline.plan_tasks_with_semantic", return_value=MOCK_PLAN_RESULT_EXACT)
+@patch("src.pipeline.refine_prompt", return_value=MOCK_REFINEMENT_RESULT)
 @patch("src.pipeline.understand_goal_with_semantic", return_value=MOCK_GOAL_RESULT_EXACT)
-def test_pipeline_full_cache_hit(mock_goal, mock_plan, mock_sem, mock_cache, mock_log):
+def test_pipeline_full_cache_hit(mock_goal, mock_refine, mock_plan, mock_sem, mock_cache, mock_log):
     """Both agents hit exact cache — zero tokens."""
     from src.pipeline import run_pipeline
     result = run_pipeline("build a todo API")
-    assert result["tokens_used"] == 0
+    assert result["tokens_used"] == 100  # only refinement uses tokens
     assert result["cache_hits"]["goal"] == "exact"
     assert result["cache_hits"]["plan"] == "exact"
 
@@ -88,13 +102,14 @@ def test_pipeline_full_cache_hit(mock_goal, mock_plan, mock_sem, mock_cache, moc
 @patch("src.pipeline.add_to_local_cache")
 @patch("src.pipeline.global_semantic_lookup", return_value=(None, 0.0))
 @patch("src.pipeline.plan_tasks_with_semantic", return_value=MOCK_PLAN_RESULT_EXACT)
+@patch("src.pipeline.refine_prompt", return_value=MOCK_REFINEMENT_RESULT)
 @patch("src.pipeline.understand_goal_with_semantic",
        return_value={**MOCK_GOAL_RESULT_NONE, "cache_hit": "semantic(0.94)", "tokens_used": 0})
-def test_pipeline_semantic_goal_hit(mock_goal, mock_plan, mock_sem, mock_cache, mock_log):
+def test_pipeline_semantic_goal_hit(mock_goal, mock_refine, mock_plan, mock_sem, mock_cache, mock_log):
     """Goal hits semantic cache, plan hits exact cache — zero tokens total."""
     from src.pipeline import run_pipeline
     result = run_pipeline("create a todo REST API")
-    assert result["tokens_used"] == 0
+    assert result["tokens_used"] == 100 # only refinement uses tokens
     assert "semantic" in result["cache_hits"]["goal"]
 
 
@@ -102,8 +117,9 @@ def test_pipeline_semantic_goal_hit(mock_goal, mock_plan, mock_sem, mock_cache, 
 @patch("src.pipeline.add_to_local_cache")
 @patch("src.pipeline.global_semantic_lookup", return_value=(None, 0.0))
 @patch("src.pipeline.plan_tasks_with_semantic", return_value=MOCK_PLAN_RESULT_NONE)
+@patch("src.pipeline.refine_prompt", return_value=MOCK_REFINEMENT_RESULT)
 @patch("src.pipeline.understand_goal_with_semantic", return_value=MOCK_GOAL_RESULT_NONE)
-def test_pipeline_returns_latency(mock_goal, mock_plan, mock_sem, mock_cache, mock_log):
+def test_pipeline_returns_latency(mock_goal, mock_refine, mock_plan, mock_sem, mock_cache, mock_log):
     """Latency field must be a non-negative float."""
     from src.pipeline import run_pipeline
     result = run_pipeline("any prompt")

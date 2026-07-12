@@ -13,6 +13,8 @@ from src.schemas import (
     GOAL_SCHEMA_KEYS, VALID_COMPLEXITY_HINTS,
     PlanSchema,
     PLAN_SCHEMA_KEYS, TASK_SCHEMA_KEYS, VALID_EFFORT_SIZES,
+    RefinedPromptSchema,
+    REFINEMENT_SCHEMA_KEYS,
 )
 
 
@@ -135,3 +137,26 @@ def _check_no_cycles(tasks: list[dict], ids: set[str]) -> None:
             "Cycle detected in task dependency graph. "
             "Ensure no task directly or transitively depends on itself."
         )
+
+
+# ── Prompt Refinement ─────────────────────────────────────────────────────────
+
+def validate_refinement_schema(refinement: dict) -> None:
+    """Raise ValueError if the refinement dict is missing required keys or has bad values."""
+    if not isinstance(refinement, dict):
+        raise ValueError(f"Expected dict, got {type(refinement).__name__}")
+
+    missing = REFINEMENT_SCHEMA_KEYS - refinement.keys()
+    if missing:
+        raise ValueError(f"Refinement JSON missing required keys: {sorted(missing)}")
+
+    if not isinstance(refinement.get("changes_made"), list):
+        raise ValueError("'changes_made' must be a list")
+
+    if not isinstance(refinement.get("ambiguity_resolved"), bool):
+        raise ValueError("'ambiguity_resolved' must be a boolean")
+
+    try:
+        RefinedPromptSchema.model_validate(refinement)
+    except ValidationError as exc:
+        raise ValueError(f"Invalid refinement JSON: {exc}") from exc
