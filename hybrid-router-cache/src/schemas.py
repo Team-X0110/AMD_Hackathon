@@ -2,6 +2,11 @@
 schemas.py — Expected JSON shapes for both agents.
 Define keys once here; validators.py and agents import from here.
 """
+from __future__ import annotations
+
+from typing import Literal
+
+from pydantic import BaseModel, ConfigDict, Field
 
 # ── Goal Understanding Agent ──────────────────────────────────────────────────
 GOAL_SCHEMA_KEYS = frozenset({
@@ -14,6 +19,19 @@ GOAL_SCHEMA_KEYS = frozenset({
 })
 
 VALID_COMPLEXITY_HINTS = frozenset({"low", "medium", "high"})
+
+
+class GoalSchema(BaseModel):
+    """Validated output from the Goal Understanding agent."""
+
+    model_config = ConfigDict(extra="allow")
+
+    intent: str = Field(min_length=1)
+    entities: list[str]
+    constraints: list[str]
+    success_criteria: list[str]
+    domain: str = Field(min_length=1)
+    complexity_hint: Literal["low", "medium", "high"]
 
 # ── Task Planning Agent ───────────────────────────────────────────────────────
 # Expected top-level plan structure:
@@ -43,3 +61,25 @@ TASK_SCHEMA_KEYS = frozenset({
 })
 
 VALID_EFFORT_SIZES = frozenset({"S", "M", "L", "XL"})
+
+
+class TaskSchema(BaseModel):
+    """Validated task item emitted by the Task Planning agent."""
+
+    model_config = ConfigDict(extra="allow")
+
+    id: str = Field(min_length=1)
+    title: str = Field(min_length=1)
+    description: str
+    depends_on: list[str]
+    estimated_effort: Literal["S", "M", "L", "XL"]
+
+
+class PlanSchema(BaseModel):
+    """Validated output from the Task Planning agent."""
+
+    model_config = ConfigDict(extra="allow")
+
+    tasks: list[TaskSchema] = Field(min_length=1)
+    execution_order: list[str]
+    parallel_groups: list[list[str]]

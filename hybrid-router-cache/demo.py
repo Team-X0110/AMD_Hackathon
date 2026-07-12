@@ -49,6 +49,7 @@ def print_result(label: str, prompt: str, result: dict) -> None:
     print(f"  Goal cache hit : {result['cache_hits']['goal']}")
     print(f"  Plan cache hit : {result['cache_hits']['plan']}")
     print(f"  Tokens used    : {result['tokens_used']}")
+    print(f"  Fireworks tok  : {result.get('fireworks_tokens', 0)}")
     print(f"  Latency        : {result['latency_sec']:.3f}s")
     print()
 

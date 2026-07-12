@@ -21,6 +21,8 @@ MOCK_GOAL_RESULT_NONE = {
     },
     "cache_hit": "none",
     "tokens_used": 400,
+    "fireworks_tokens": 0,
+    "routing": [{"tier": "local", "success": True}],
 }
 
 MOCK_PLAN_RESULT_NONE = {
@@ -31,6 +33,8 @@ MOCK_PLAN_RESULT_NONE = {
     },
     "cache_hit": "none",
     "tokens_used": 800,
+    "fireworks_tokens": 0,
+    "routing": [{"tier": "local", "success": True}],
 }
 
 MOCK_GOAL_RESULT_EXACT = {**MOCK_GOAL_RESULT_NONE, "cache_hit": "exact", "tokens_used": 0}
@@ -45,6 +49,8 @@ def test_pipeline_cache_miss(mock_goal, mock_plan, mock_log):
     from src.pipeline import run_pipeline
     result = run_pipeline("build a todo API")
     assert result["tokens_used"] == 1200
+    assert result["fireworks_tokens"] == 0
+    assert "routing" in result
     assert result["cache_hits"]["goal"] == "none"
     assert result["cache_hits"]["plan"] == "none"
     assert "latency_sec" in result

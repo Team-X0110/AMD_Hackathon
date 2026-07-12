@@ -1,35 +1,25 @@
 """
-agents/task_planning.py — Task Planning Agent (Agent 2).
+agents/task_planning.py — Task Planning Agent.
 
-Cache handling has been moved to the top-level Routing Engine in pipeline.py.
-This agent receives a dynamically routed model tier, decomposes the goal into 
-an actionable dependency graph, and includes self-healing retry logic if 
-DAG validation fails.
+Cache key is based on normalized GOAL JSON.
+Uses local-first dynamic routing with validation-gated escalation.
 """
 from __future__ import annotations
 import json
 
-from src.config import LOCAL_MODEL, PLAN_MODEL
-from src.fireworks_client import call_llm
+from src.config import PLAN_COLLECTION
+from src.fireworks_client import get_embedding
+from src.cache.exact_cache import normalize, hash_key, get_cached, set_cached
+from src.cache.semantic_cache import semantic_lookup
+from src.routing.engine import get_routing_engine
 from src.validators import validate_task_graph
 
 
-# ── Which model to use per tier ──────────────────────────────────────────────
-def _get_model_for_tier(tier: str) -> str:
-    """
-    Maps the router's tier decision to active Fireworks Serverless models.
-    """
-    if tier == "local":
-        return LOCAL_MODEL
-    elif tier in ["small", "medium", "large"]:
-        # The powerhouse model your API key has explicit access to
-        return "accounts/fireworks/models/deepseek-v4-pro"
-    
-    # Keep return GOAL_MODEL here (or PLAN_MODEL in task_planning.py)
-    return PLAN_MODEL
+def plan_key_from_goal(goal: dict) -> str:
+    canonical = json.dumps(goal, sort_keys=True)
+    return hash_key(canonical)
 
 
-# ── System prompt ─────────────────────────────────────────────────────────────
 PLAN_SYSTEM_PROMPT = """You are a Task Planning Agent. Given a structured goal JSON, decompose it into an actionable task graph.
 
 Return a JSON object with EXACTLY these top-level keys:
@@ -60,42 +50,77 @@ Rules:
 - 'estimated_effort': S=hours, M=1-2 days, L=3-5 days, XL=week+"""
 
 
-# ── Execution ─────────────────────────────────────────────────────────────────
+def _run_plan_llm(goal_text: str, goal: dict) -> tuple[dict, int, int, list[dict]]:
+    engine = get_routing_engine()
+    result, token_usage, outcomes = engine.execute_with_escalation(
+        agent="plan",
+        text=goal_text,
+        system_prompt=PLAN_SYSTEM_PROMPT,
+        user_prompt=goal_text,
+        validate_fn=validate_task_graph,
+    )
+    routing = [o.model_dump() for o in outcomes]
+    return result, token_usage.total_tokens, token_usage.fireworks_tokens, routing
 
-def plan_tasks_with_semantic(goal: dict, tier: str = "local", retry: bool = True) -> dict:
-    """
-    Executes the LLM call using the model tier determined by the RoutingEngine.
-    Includes an automatic retry if the generated task graph has cyclical dependencies.
-    """
-    target_model = _get_model_for_tier(tier)
-    print(f"[Agent 2] Executing Task Planning on Tier: {tier.upper()} | Model: {target_model}")
-    
-    goal_text = json.dumps(goal)
-    
-    # 1. First attempt at DAG generation
-    result, usage = call_llm(tier, target_model, PLAN_SYSTEM_PROMPT, goal_text)
 
-    # 2. Validation and Self-Healing
-    try:
-        validate_task_graph(result)
-    except ValueError as e:
-        if retry:
-            print(f"[Agent 2] DAG Validation failed: {e}. Executing self-healing retry...")
-            corrective = (
-                goal_text
-                + f"\n\nYour previous attempt was invalid: {e}\n"
-                "Fix the issues and return corrected JSON."
-            )
-            # Re-run with the corrective prompt
-            result, usage2 = call_llm(tier, target_model, PLAN_SYSTEM_PROMPT, corrective)
-            validate_task_graph(result)
-            
-            # Combine token usage from both attempts
-            usage["total_tokens"] = usage.get("total_tokens", 0) + usage2.get("total_tokens", 0)
-        else:
-            raise
+def plan_tasks(goal: dict, retry: bool = True) -> dict:
+    """Exact cache only."""
+    key = plan_key_from_goal(goal)
 
+    cached = get_cached(PLAN_COLLECTION, key)
+    if cached:
+        return {"tasks": cached["tasks_json"], "cache_hit": "exact", "tokens_used": 0}
+
+    goal_str = json.dumps(goal)
+    result, tokens, fw_tokens, routing = _run_plan_llm(goal_str, goal)
+
+    set_cached(PLAN_COLLECTION, key, {"goal_json": goal, "tasks_json": result})
     return {
         "tasks": result,
-        "tokens_used": usage.get("total_tokens", 0)
+        "cache_hit": "none",
+        "tokens_used": tokens,
+        "fireworks_tokens": fw_tokens,
+        "routing": routing,
+    }
+
+
+def plan_tasks_with_semantic(goal: dict, retry: bool = True) -> dict:
+    """Full cache chain: exact → semantic → routed LLM fallback."""
+    key = plan_key_from_goal(goal)
+
+    cached = get_cached(PLAN_COLLECTION, key)
+    if cached:
+        return {
+            "tasks": cached["tasks_json"],
+            "cache_hit": "exact",
+            "tokens_used": 0,
+            "fireworks_tokens": 0,
+            "routing": [],
+        }
+
+    goal_text = json.dumps(goal, sort_keys=True)
+    semantic_match, score = semantic_lookup(PLAN_COLLECTION, goal_text)
+    if semantic_match:
+        return {
+            "tasks": semantic_match["tasks_json"],
+            "cache_hit": f"semantic({score:.2f})",
+            "tokens_used": 0,
+            "fireworks_tokens": 0,
+            "routing": [],
+        }
+
+    result, tokens, fw_tokens, routing = _run_plan_llm(goal_text, goal)
+
+    embedding = get_embedding(normalize(goal_text))
+    set_cached(
+        PLAN_COLLECTION, key,
+        {"goal_json": goal, "tasks_json": result},
+        embedding=embedding,
+    )
+    return {
+        "tasks": result,
+        "cache_hit": "none",
+        "tokens_used": tokens,
+        "fireworks_tokens": fw_tokens,
+        "routing": routing,
     }

@@ -5,8 +5,13 @@ agents knows exactly what to append to the corrective prompt.
 """
 from __future__ import annotations
 from collections import deque
+
+from pydantic import ValidationError
+
 from src.schemas import (
+    GoalSchema,
     GOAL_SCHEMA_KEYS, VALID_COMPLEXITY_HINTS,
+    PlanSchema,
     PLAN_SCHEMA_KEYS, TASK_SCHEMA_KEYS, VALID_EFFORT_SIZES,
 )
 
@@ -37,6 +42,11 @@ def validate_goal_schema(goal: dict) -> None:
     if not isinstance(goal.get("success_criteria"), list):
         raise ValueError("'success_criteria' must be a list")
 
+    try:
+        GoalSchema.model_validate(goal)
+    except ValidationError as exc:
+        raise ValueError(f"Invalid goal JSON: {exc}") from exc
+
 
 # ── Task Planning ─────────────────────────────────────────────────────────────
 
@@ -65,6 +75,11 @@ def validate_task_graph(plan: dict, max_tasks: int = 15) -> None:
             f"Too many tasks ({len(tasks)}). Max is {max_tasks}. "
             "Consolidate related steps."
         )
+
+    try:
+        PlanSchema.model_validate(plan)
+    except ValidationError as exc:
+        raise ValueError(f"Invalid plan JSON: {exc}") from exc
 
     # Validate each task's fields
     ids: set[str] = set()

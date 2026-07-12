@@ -39,10 +39,39 @@ AUTH_HEADERS = {
     "Content-Type": "application/json",
 }
 
-# Fireworks model names (used when LLM_BACKEND="fireworks")
-GOAL_MODEL = "accounts/fireworks/models/llama-v3p1-8b-instruct"
-PLAN_MODEL = "accounts/fireworks/models/llama-v3p1-70b-instruct"
+# Fireworks model names (used when LLM_BACKEND="fireworks" or routing fallback)
+GOAL_MODEL = os.environ.get(
+    "GOAL_MODEL", "accounts/fireworks/models/gpt-oss-20b"
+)
+PLAN_MODEL = os.environ.get(
+    "PLAN_MODEL", "accounts/fireworks/models/gpt-oss-120b"
+)
 EMBED_MODEL = "nomic-ai/nomic-embed-text-v1.5"
+
+# ── Dynamic routing engine ────────────────────────────────────────────────────
+ROUTING_ENABLED: bool = os.environ.get("ROUTING_ENABLED", "true").lower() == "true"
+ROUTING_FC_THRESHOLD: float = float(os.environ.get("ROUTING_FC_THRESHOLD", "0.85"))
+ROUTING_MAX_ESCALATIONS: int = int(os.environ.get("ROUTING_MAX_ESCALATIONS", "3"))
+ROUTING_STATS_COLLECTION: str = "routing_stats"
+EMBED_BACKEND: str = os.environ.get("EMBED_BACKEND", "local")
+
+ROUTER_FC_MODEL: str = os.environ.get(
+    "ROUTER_FC_MODEL", "accounts/fireworks/models/gpt-oss-20b"
+)
+
+# tier name → (backend tier for call_llm, model id)
+ROUTE_MODELS: dict[str, tuple[str, str]] = {
+    "local": ("local", LOCAL_MODEL),
+    "fireworks_small": ("fireworks", GOAL_MODEL),
+    "fireworks_medium": ("fireworks", PLAN_MODEL),
+    "fireworks_large": (
+        "fireworks",
+        os.environ.get(
+            "FIREWORKS_LARGE_MODEL",
+            "accounts/fireworks/models/deepseek-v4-pro",
+        ),
+    ),
+}
 
 # ── Firebase ──────────────────────────────────────────────────────────────────
 # Option A: path to service-account JSON (download from Firebase Console)

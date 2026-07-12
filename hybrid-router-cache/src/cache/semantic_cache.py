@@ -1,94 +1,71 @@
 """
-cache/semantic_cache.py — Local FAISS-based semantic cache with Firebase sync.
+cache/semantic_cache.py — Embedding-based semantic cache. (Now uses Realtime DB)
 """
 from __future__ import annotations
 
-import faiss
 import numpy as np
-from sentence_transformers import SentenceTransformer
 
 from src.cache.firestore_client import get_db
+from src.cache.memory_store import memory_list
 from src.cache.exact_cache import normalize
-from src.config import SEMANTIC_THRESHOLD
+from src.fireworks_client import get_embedding
+from src.config import SEMANTIC_THRESHOLD, CACHE_LOOKBACK_LIMIT
 
-# ---------------------------------------------------------
-# Module-level Initialization (Loads once on worker start)
-# ---------------------------------------------------------
-print("Loading local embedding model (all-MiniLM-L6-v2)...")
-encoder = SentenceTransformer('all-MiniLM-L6-v2')
-dimension = encoder.get_sentence_embedding_dimension()
 
-# FAISS IndexFlatIP uses Inner Product. When vectors are L2-normalized, IP == Cosine Similarity.
-index = faiss.IndexFlatIP(dimension)
+def cosine_sim(a: list[float], b: list[float]) -> float:
+    """Return cosine similarity in [0, 1]. Returns 0.0 if either vector is zero."""
+    va = np.array(a, dtype=np.float32)
+    vb = np.array(b, dtype=np.float32)
+    denom = float(np.linalg.norm(va) * np.linalg.norm(vb))
+    if denom == 0.0:
+        return 0.0
+    return float(np.dot(va, vb) / denom)
 
-# In-memory mapping of FAISS internal IDs to the cached document payloads
-memory_map = {}
-current_id = 0
 
-def _get_embedding(text: str) -> np.ndarray:
-    """Generates an L2-normalized embedding for cosine similarity."""
-    emb = encoder.encode([text])[0]
-    # Normalize to ensure Inner Product acts as Cosine Similarity
-    faiss.normalize_L2(np.array([emb]))
-    return np.array([emb])
-
-def sync_from_firebase(collection: str):
+def semantic_lookup(
+    collection: str,
+    query_text: str,
+) -> tuple[dict | None, float]:
     """
-    Run this ONCE when the worker starts. 
-    It pulls historical cache from Firebase and builds the fast FAISS index.
+    Search the collection for the most semantically similar cached entry.
+    Skips lookup if embeddings are unavailable (pipeline continues without semantic hit).
     """
-    global current_id
-    ref = get_db().child(collection)
-    raw = ref.get()
-
-    if not raw:
-        print(f"No existing cache found in Firebase collection: {collection}")
-        return
-
-    print(f"Syncing {len(raw)} records from Firebase into FAISS...")
-    for key, doc in raw.items():
-        if isinstance(doc, dict) and "prompt" in doc:
-            add_to_local_cache(doc["prompt"], doc, sync_to_db=False)
-            
-    print("FAISS index built successfully.")
-
-def add_to_local_cache(query_text: str, doc_data: dict, sync_to_db: bool = True):
-    """
-    Embeds the prompt and stores it in the local FAISS index.
-    Optionally syncs back to Firebase for persistence.
-    """
-    global current_id
-    norm_text = normalize(query_text)
-    embedding = _get_embedding(norm_text)
-    
-    index.add(embedding)
-    memory_map[current_id] = doc_data
-    current_id += 1
-    
-    # If this is a new subtask, save it to Firebase so it persists across restarts
-    if sync_to_db:
-        # Assuming you have a collection name setup in config
-        collection = "semantic_cache" 
-        get_db().child(collection).push(doc_data)
-
-def semantic_lookup(query_text: str) -> tuple[dict | None, float]:
-    """
-    O(1) Search using the local FAISS index. Consumes 0 Fireworks tokens.
-    """
-    if current_id == 0:
+    try:
+        query_emb = get_embedding(normalize(query_text))
+    except RuntimeError as exc:
+        print(f"[semantic_cache] Skipping semantic lookup: {exc}")
         return None, 0.0
 
-    norm_text = normalize(query_text)
-    query_emb = _get_embedding(norm_text)
-    
-    # Search for the top 1 nearest neighbor
-    k = 1
-    distances, indices = index.search(query_emb, k)
-    
-    best_score = float(distances[0][0])
-    best_index = int(indices[0][0])
+    try:
+        ref = get_db().child(collection)
+        raw = ref.get()
+    except Exception as exc:
+        print(f"[semantic_cache] RTDB unavailable, using in-memory cache: {exc}")
+        raw = memory_list(collection)
 
-    if best_score >= SEMANTIC_THRESHOLD and best_index != -1:
-        return memory_map[best_index], best_score
+    if not raw:
+        return None, 0.0
+
+    # Sort by created_at descending, take last CACHE_LOOKBACK_LIMIT
+    items = [(k, v) for k, v in raw.items() if isinstance(v, dict)]
+    items.sort(key=lambda x: x[1].get("created_at", 0), reverse=True)
+    items = items[:CACHE_LOOKBACK_LIMIT]
+
+    results = {k: v for k, v in items}
+
+    best_doc: dict | None = None
+    best_score: float = 0.0
+
+    # results is an OrderedDict mapping keys to dicts
+    for key, d in results.items():
+        if not isinstance(d, dict) or "embedding" not in d:
+            continue
+        
+        score = cosine_sim(query_emb, d["embedding"])
+        if score > best_score:
+            best_doc, best_score = d, score
+
+    if best_score >= SEMANTIC_THRESHOLD:
+        return best_doc, best_score
 
     return None, best_score
