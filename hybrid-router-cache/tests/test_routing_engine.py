@@ -74,9 +74,10 @@ VALID_GOAL = {
 }
 
 
+@patch("src.routing.engine.route_via_fireworks_fc", return_value=None)
 @patch("src.routing.engine.record_outcome")
 @patch("src.routing.engine.call_llm")
-def test_engine_local_first_success(mock_llm, mock_record):
+def test_engine_local_first_success(mock_llm, mock_record, mock_fc):
     mock_llm.return_value = (VALID_GOAL, {"total_tokens": 100, "backend": "local"})
     from src.routing.engine import DynamicRoutingEngine
     from src.validators import validate_goal_schema
@@ -96,10 +97,11 @@ def test_engine_local_first_success(mock_llm, mock_record):
     mock_llm.assert_called_once()
 
 
+@patch("src.routing.engine.route_via_fireworks_fc", return_value=None)
 @patch("src.routing.engine.record_outcome")
 @patch("src.routing.engine.call_llm")
 @patch("src.routing.engine.FIREWORKS_API_KEY", "test-key")
-def test_engine_escalates_on_validation_failure(mock_llm, mock_record):
+def test_engine_escalates_on_validation_failure(mock_llm, mock_record, mock_fc):
     bad = {"intent": "missing keys"}
     mock_llm.side_effect = [
         (bad, {"total_tokens": 50, "backend": "local"}),
