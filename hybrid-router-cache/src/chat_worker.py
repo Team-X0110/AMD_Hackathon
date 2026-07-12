@@ -59,21 +59,25 @@ def handle_message(event):
         # Run the AI pipeline
         result = run_pipeline(text)
         
-        # Format the response
+        # Build the conversational response + a slim metrics footer
         goal_routes = result.get("routing", {}).get("goal", [])
         plan_routes = result.get("routing", {}).get("plan", [])
         goal_route = goal_routes[-1].get("tier", goal_routes[-1].get("routed_tier", "cache/local")) if goal_routes else "cache/local"
         plan_route = plan_routes[-1].get("tier", plan_routes[-1].get("routed_tier", "cache/local")) if plan_routes else "cache/local"
 
-        formatted_response = (
-            f"**Goal Understood:**\n```json\n{json.dumps(result['goal'], indent=2)}\n```\n\n"
-            f"**Task Plan:**\n```json\n{json.dumps(result['tasks'], indent=2)}\n```\n\n"
-            f"---\n"
-            f"*Metrics: Cache (Goal: {result['cache_hits']['goal']}, Plan: {result['cache_hits']['plan']}) | "
+        # Main body: natural language answer from Agent 4
+        main_text = result.get("response_text") or ""
+
+        # Slim metrics footer (preserved for token/routing transparency)
+        metrics_footer = (
+            f"\n\n---\n"
+            f"*Cache (Goal: {result['cache_hits']['goal']}, Plan: {result['cache_hits']['plan']}) | "
             f"Fireworks Tokens: {result.get('fireworks_tokens', 0)} | "
-            f"Route (Goal: {goal_route}, Plan: {plan_route}) | "
+            f"Route: {goal_route} | "
             f"Tokens: {result['tokens_used']} | Latency: {result['latency_sec']}s*"
         )
+
+        formatted_response = main_text + metrics_footer
         
         bot_msg = {
             "text": formatted_response,

@@ -15,6 +15,7 @@ from src.cache.firestore_client import get_db
 from src.agents.goal_understanding import understand_goal_with_semantic
 from src.agents.task_planning import plan_tasks_with_semantic
 from src.agents.prompt_refinement import refine_prompt
+from src.agents.response_generation import generate_response
 from src.config import RUNS_COLLECTION
 
 # --- NEW ROUTER IMPORTS ---
@@ -44,6 +45,11 @@ def run_pipeline(user_prompt: str) -> dict:
         cached_doc["cache_hits"] = {"goal": f"semantic({score:.2f})", "plan": "semantic"}
         cached_doc["tokens_used"] = 0
         cached_doc["latency_sec"] = round(time.perf_counter() - t0, 3)
+        # Ensure response_text exists for old cache entries
+        if not cached_doc.get("response_text"):
+            cached_doc["response_text"] = (
+                "*(Answered from semantic cache — zero tokens used.)*"
+            )
         return cached_doc
 
     # ── Phase 2: Feature Extraction ───────────────────────────────────────────
@@ -54,24 +60,37 @@ def run_pipeline(user_prompt: str) -> dict:
     # ── Agent 1: Prompt Refinement ────────────────────────────────────────────
     print("📝 Refining user prompt...")
     refinement_result = refine_prompt(user_prompt)
-    refined_user_prompt = refinement_result["refinement"]["refined_prompt"]
+    refined_user_prompt = (
+        refinement_result.get("refinement", {}).get("refined_prompt")
+        or user_prompt
+    )
     print(f"✨ Refined Prompt: {refined_user_prompt}")
 
     # ── Agent 2: Goal Understanding ───────────────────────────────────────────
     goal_result = understand_goal_with_semantic(refined_user_prompt)
 
-    # ── Agent 3: Task Planning ────────────────────────────────────────────────
+    # ── Agent 3: Task Planning ────────────────────────────────────────────
     plan_result = plan_tasks_with_semantic(goal_result["goal"])
+
+    # ── Agent 4: Response Generation (natural conversational reply) ───────
+    print("💬 Generating conversational response...")
+    response_result = generate_response(
+        refined_user_prompt,
+        goal_result["goal"],
+        plan_result["tasks"],
+    )
 
     total_tokens = (
         refinement_result["tokens_used"]
         + goal_result["tokens_used"]
         + plan_result["tokens_used"]
+        + response_result["tokens_used"]
     )
     fireworks_tokens = (
         refinement_result.get("fireworks_tokens", 0)
         + goal_result.get("fireworks_tokens", 0)
         + plan_result.get("fireworks_tokens", 0)
+        + response_result.get("fireworks_tokens", 0)
     )
     latency = round(time.perf_counter() - t0, 3)
 
@@ -81,6 +100,7 @@ def run_pipeline(user_prompt: str) -> dict:
     print(f"🧠 Routing Decision: Tier=[{str(tier).upper()}], Complexity=[{complexity}/10]")
 
     final_response = {
+        "response_text": response_result["response"],  # Natural language reply for frontend
         "refined_prompt": refined_user_prompt,
         "goal": goal_result["goal"],
         "tasks": plan_result["tasks"],
@@ -100,7 +120,7 @@ def run_pipeline(user_prompt: str) -> dict:
         },
     }
 
-    # ── Phase 4: Save to Local Memory ─────────────────────────────────────────
+    # ── Phase 5: Save to Local Memory ─────────────────────────────────────
     add_to_local_cache(user_prompt, final_response)
 
     # ── Logging ───────────────────────────────────────────────────────────────
