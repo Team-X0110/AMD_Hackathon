@@ -1,6 +1,7 @@
 """Tier escalation and fallback ladder."""
 from __future__ import annotations
 
+from src.config import LLM_BACKEND
 from src.routing.models import ESCALATION_LADDER, RouteTier
 
 
@@ -29,8 +30,15 @@ def execution_start_tier(
     python_confident: bool,
 ) -> RouteTier:
     """
-    Local-first execution: start at local unless python tier is very confident for goal agent.
+    Backend-aware execution: respects LLM_BACKEND configuration.
+    - If LLM_BACKEND=fireworks, start with Fireworks (cloud-first).
+    - If LLM_BACKEND=local, start with Local (local-first).
+    - Always use PYTHON if confident for goal agent.
     """
     if agent == "goal" and decision_tier == RouteTier.PYTHON and python_confident:
         return RouteTier.PYTHON
+    
+    if LLM_BACKEND == "fireworks":
+        return RouteTier.FIREWORKS_SMALL
+    
     return RouteTier.LOCAL

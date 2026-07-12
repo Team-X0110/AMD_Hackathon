@@ -20,6 +20,7 @@ import logging
 import time
 
 import requests
+import re
 
 from src.config import (
     # Ollama
@@ -73,6 +74,18 @@ def call_llm(
     else:
         raise ValueError(f"Unknown LLM tier '{tier}'. Use 'local' or 'fireworks'.")
 
+# automatic schema repair
+def _repair_goal_schema(data: dict) -> dict:
+    """Ensure required GoalSchema fields always exist."""
+
+    data.setdefault("intent", "")
+    data.setdefault("entities", [])
+    data.setdefault("constraints", [])
+    data.setdefault("success_criteria", [])
+    data.setdefault("domain", "general")
+    data.setdefault("complexity_hint", "medium")
+
+    return data
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Ollama  (local)
@@ -116,8 +129,12 @@ def call_ollama_chat(
 
             body = resp.json()
             content = body["message"]["content"]
+            parsed = json.loads(content)
 
-            return json.loads(content), _normalize_usage(
+            if isinstance(parsed, dict):
+                parsed = _repair_goal_schema(parsed)
+
+            return parsed, _normalize_usage(
                 {
                     "prompt_tokens": body.get("prompt_eval_count", 0),
                     "completion_tokens": body.get("eval_count", 0),
@@ -193,7 +210,13 @@ def call_fireworks_chat(
             body = resp.json()
             content = body["choices"][0]["message"]["content"]
             usage = body.get("usage", {})
-            return json.loads(content), _normalize_usage(usage, backend="fireworks")
+
+            parsed = json.loads(content)
+
+            if isinstance(parsed, dict):
+                parsed = _repair_goal_schema(parsed)
+
+            return parsed, _normalize_usage(usage, backend="fireworks")
 
         except requests.exceptions.HTTPError as e:
             status = e.response.status_code if e.response is not None else 0
@@ -390,18 +413,28 @@ def get_embedding(
 ) -> list[float]:
     """
     Get a text embedding vector.
-    Prefers local Ollama when EMBED_BACKEND=local (zero Fireworks tokens).
-    Falls back to Fireworks when Ollama is unreachable and an API key is set.
+    Prefers Fireworks when API key is available (cloud-backed).
+    Falls back to local Ollama only if Fireworks is unavailable.
     """
+    if FIREWORKS_API_KEY:
+        return _get_embedding_fireworks(text, model, max_retries)
+    
     if EMBED_BACKEND == "local":
-        try:
-            return _get_embedding_local(text, max_retries)
-        except RuntimeError as exc:
-            if FIREWORKS_API_KEY:
-                logger.warning("Local embedding unavailable, using Fireworks fallback: %s", exc)
-                return _get_embedding_fireworks(text, model, max_retries)
-            raise
+        return _get_embedding_local(text, max_retries)
+    
+    raise RuntimeError("No embedding backend available: set FIREWORKS_API_KEY or EMBED_BACKEND=local")
 
-    return _get_embedding_fireworks(text, model, max_retries)
+def _extract_json(text: str) -> dict:
+    text = text.strip()
 
+    try: 
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
 
+    match = re.search(r"\{.*\}", text, re.DOTALL)
+
+    if match:
+        return json.loads(match.group(0))
+    
+    raise ValueError("No valid JSON found in model response.")

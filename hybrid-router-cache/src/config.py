@@ -18,7 +18,7 @@ load_dotenv(BASE_DIR / ".env")
 
 # ── LLM Backend routing ───────────────────────────────────────────────────────
 # Set to "local" (Ollama) or "fireworks" in .env
-LLM_BACKEND: str = os.environ.get("LLM_BACKEND", "local")
+LLM_BACKEND: str = os.environ.get("LLM_BACKEND", "fireworks")
 
 # ── Ollama (local) ────────────────────────────────────────────────────────────
 OLLAMA_URL: str = os.environ.get("OLLAMA_URL", "http://localhost:11434/api/chat")
@@ -53,7 +53,7 @@ ROUTING_ENABLED: bool = os.environ.get("ROUTING_ENABLED", "true").lower() == "tr
 ROUTING_FC_THRESHOLD: float = float(os.environ.get("ROUTING_FC_THRESHOLD", "0.85"))
 ROUTING_MAX_ESCALATIONS: int = int(os.environ.get("ROUTING_MAX_ESCALATIONS", "3"))
 ROUTING_STATS_COLLECTION: str = "routing_stats"
-EMBED_BACKEND: str = os.environ.get("EMBED_BACKEND", "local")
+EMBED_BACKEND: str = os.environ.get("EMBED_BACKEND", "fireworks")
 
 ROUTER_FC_MODEL: str = os.environ.get(
     "ROUTER_FC_MODEL", "accounts/fireworks/models/gpt-oss-20b"

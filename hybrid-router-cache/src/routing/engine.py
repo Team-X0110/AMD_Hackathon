@@ -21,6 +21,7 @@ from src.fireworks_client import call_llm
 from src.routing.escalation import execution_start_tier, next_tier, skip_tier
 from src.routing.fireworks_router import route_via_fireworks_fc, should_use_fc
 from src.routing.heuristics import score_complexity
+from src.prompt_optimizer import PromptOptimizer
 from src.routing.learning import get_learned_stats_flat, record_outcome
 from src.routing.models import RouteDecision, RouteOutcome, RouteTier, TokenUsage
 from src.routing.python_executor import extract_goal_from_prompt
@@ -29,6 +30,8 @@ logger = logging.getLogger(__name__)
 
 
 class DynamicRoutingEngine:
+    def __init__(self, *, prompt_optimizer: PromptOptimizer | None = None) -> None:
+        self.prompt_optimizer = prompt_optimizer or PromptOptimizer()
     def decide(self, agent: str, text: str) -> RouteDecision:
         learned = get_learned_stats_flat(agent)
         tier, conf, reason, _complexity = score_complexity(text, agent, learned)
@@ -70,8 +73,11 @@ class DynamicRoutingEngine:
         return call_llm(backend, model, system_prompt, user_prompt)
 
     def _first_executable_tier(self, decision: RouteDecision, agent: str) -> RouteTier:
-        """Choose an executable starting tier while preserving cheap fallback behavior."""
+        """Choose an executable starting tier respecting backend configuration."""
         if agent == "plan" and decision.tier == RouteTier.PYTHON:
+            # Plan agent can't use Python; escalate to the configured backend
+            if LLM_BACKEND == "fireworks" and FIREWORKS_API_KEY:
+                return RouteTier.FIREWORKS_SMALL
             return RouteTier.LOCAL
 
         if decision.tier in {
@@ -84,6 +90,10 @@ class DynamicRoutingEngine:
                 decision.tier.value,
             )
             return RouteTier.LOCAL
+
+        # If decision tier is LOCAL but Fireworks is configured, use Fireworks instead
+        if decision.tier == RouteTier.LOCAL and LLM_BACKEND == "fireworks" and FIREWORKS_API_KEY:
+            return RouteTier.FIREWORKS_SMALL
 
         return decision.tier
 
@@ -119,6 +129,7 @@ class DynamicRoutingEngine:
 
         decision = self.decide(agent, text)
         routing_tokens = decision.routing_tokens
+        optimized_system, optimized_user = self._optimize_prompts(system_prompt, user_prompt)
 
         python_confident = (
             agent == "goal"
@@ -142,8 +153,16 @@ class DynamicRoutingEngine:
             t0 = time.perf_counter()
             attempt_usage = TokenUsage()
             try:
+                logger.debug("=" * 20)
+                logger.debug("SYSTEM PROMPT")
+                logger.debug(optimized_system)
+                logger.debug("=" * 20)
+
+                logger.debug("USER PROMPT")
+                logger.debug(optimized_user)
+                logger.debug("=" * 20)
                 result, usage = self._execute_tier(
-                    current, system_prompt, user_prompt
+                    current, optimized_system, optimized_user
                 )
                 attempt_usage = self._usage_to_token_usage(usage, routing_tokens=0)
                 total_usage.add(attempt_usage)
@@ -241,6 +260,14 @@ class DynamicRoutingEngine:
                 continue
 
         raise RuntimeError(f"All routes exhausted for agent={agent}")
+
+    def _optimize_prompts(self, system_prompt: str, user_prompt: str) -> tuple[str, str]:
+        optimized = self.prompt_optimizer.optimize(
+            system_prompt,
+            user_prompt,
+            max_user_tokens=256,
+        )
+        return optimized.system_prompt, optimized.user_prompt
 
     def _next_executable_tier(self, current: RouteTier) -> RouteTier | None:
         nxt = next_tier(current)

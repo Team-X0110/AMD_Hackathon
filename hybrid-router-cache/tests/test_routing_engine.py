@@ -28,7 +28,8 @@ def test_heuristic_plan_never_python():
     assert tier != RouteTier.PYTHON
 
 
-def test_execution_start_local_first():
+@patch("src.routing.escalation.LLM_BACKEND", "local")
+def test_execution_start_local_first(mock_backend):
     start = execution_start_tier(
         RouteTier.FIREWORKS_MEDIUM,
         agent="plan",
@@ -76,7 +77,8 @@ VALID_GOAL = {
 
 @patch("src.routing.engine.record_outcome")
 @patch("src.routing.engine.call_llm")
-def test_engine_local_first_success(mock_llm, mock_record):
+@patch("src.routing.engine.LLM_BACKEND", "local")
+def test_engine_local_first_success(mock_backend, mock_llm, mock_record):
     mock_llm.return_value = (VALID_GOAL, {"total_tokens": 100, "backend": "local"})
     from src.routing.engine import DynamicRoutingEngine
     from src.validators import validate_goal_schema
@@ -99,7 +101,8 @@ def test_engine_local_first_success(mock_llm, mock_record):
 @patch("src.routing.engine.record_outcome")
 @patch("src.routing.engine.call_llm")
 @patch("src.routing.engine.FIREWORKS_API_KEY", "test-key")
-def test_engine_escalates_on_validation_failure(mock_llm, mock_record):
+@patch("src.routing.engine.LLM_BACKEND", "local")
+def test_engine_escalates_on_validation_failure(mock_backend, mock_llm, mock_record):
     bad = {"intent": "missing keys"}
     mock_llm.side_effect = [
         (bad, {"total_tokens": 50, "backend": "local"}),
