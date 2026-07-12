@@ -12,18 +12,18 @@ const MainLayout: React.FC = () => {
   const [activeChatId, setActiveChatId] = useState<string | null>(null);
 
   const spinnerScreen = (msg: string) => (
-    <div className="min-h-screen w-full flex flex-col items-center justify-center bg-white dark:bg-[#111111]">
-      <div className="w-6 h-6 rounded-sm border-2 border-slate-200 dark:border-slate-800 border-t-red-600 dark:border-t-red-600 animate-spin mb-4"></div>
-      <p className="text-xs text-slate-500 dark:text-slate-400 font-medium uppercase tracking-wider">{msg}</p>
+    <div className="min-h-screen w-full flex flex-col items-center justify-center bg-light-bg dark:bg-dark-bg">
+      <div className="w-6 h-6 rounded-full border-2 border-light-border dark:border-dark-border border-t-brand animate-spin mb-4"></div>
+      <p className="text-xs text-neutral-500 dark:text-neutral-400 font-medium uppercase tracking-wider">{msg}</p>
     </div>
   );
 
   if (isConfigLoading) return spinnerScreen('Checking configurations...');
   if (!isConfigured) {
     return (
-      <div className="min-h-screen w-full flex flex-col items-center justify-center bg-white dark:bg-[#111111]">
-        <h2 className="text-lg font-bold text-slate-900 dark:text-white mb-2">Missing Configuration</h2>
-        <p className="text-sm text-slate-500 max-w-md text-center">
+      <div className="min-h-screen w-full flex flex-col items-center justify-center bg-light-bg dark:bg-dark-bg">
+        <h2 className="text-lg font-bold text-neutral-900 dark:text-white mb-2">Missing Configuration</h2>
+        <p className="text-sm text-neutral-500 max-w-md text-center">
           Provide your Firebase configuration in <code>frontend/.env</code> via <code>VITE_FIREBASE_*</code> variables.
         </p>
       </div>
@@ -33,7 +33,7 @@ const MainLayout: React.FC = () => {
   if (!currentUser) return spinnerScreen('Entering chat room...');
 
   return (
-    <div className="h-screen w-screen flex overflow-hidden bg-white dark:bg-[#111111] text-slate-900 dark:text-slate-200 font-sans">
+    <div className="h-screen w-screen flex overflow-hidden bg-light-bg dark:bg-dark-bg text-neutral-900 dark:text-neutral-100 font-sans">
       <Sidebar activeChatId={activeChatId} setActiveChatId={setActiveChatId} />
       <ChatWindow activeChatId={activeChatId} />
     </div>

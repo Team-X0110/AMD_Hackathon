@@ -1,0 +1,8 @@
+:root {
+  --color-brand: #00a8b5;
+  --color-brand-hover: #007d87;
+  --color-brand-light: rgba(0, 168, 181, 0.08);
+  --color-brand-border: rgba(0, 168, 181, 0.18);
+
+  --color-brand-rgb: 0, 168, 181;
+}

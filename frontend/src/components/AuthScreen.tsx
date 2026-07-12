@@ -1,11 +1,9 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { useFirebaseConfig } from '../context/FirebaseConfigContext';
-import { Mail, Lock, User as UserIcon, LogIn, ArrowRight, ShieldCheck, Settings } from 'lucide-react';
+import { Mail, Lock, User as UserIcon, ArrowRight, ShieldCheck } from 'lucide-react';
 
 export const AuthScreen: React.FC = () => {
   const { loginAnonymously, loginWithEmail, registerWithEmail } = useAuth();
-  const { clearConfig } = useFirebaseConfig();
   const [tab, setTab] = useState<'signin' | 'signup' | 'anonymous'>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -49,43 +47,33 @@ export const AuthScreen: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen w-full flex bg-[#0a0a0a]">
-      {/* Settings / Reset Firebase Config trigger */}
-      <button 
-        onClick={clearConfig} 
-        title="Reset Firebase Settings"
-        className="absolute top-4 right-4 flex items-center gap-1.5 px-3 py-1.5 rounded-sm border border-neutral-800 bg-neutral-900/50 hover:bg-neutral-800 text-neutral-400 hover:text-white transition-all text-xs cursor-pointer z-10"
-      >
-        <Settings size={14} /> System Config
-      </button>
-
+    <div className="min-h-screen w-full flex bg-dark-bg transition-colors">
       {/* Asymmetric Split Layout */}
-      <div className="hidden lg:flex flex-col justify-between w-5/12 bg-[#111111] border-r border-neutral-900 p-12">
+      <div className="hidden lg:flex flex-col justify-between w-5/12 bg-dark-surface border-r border-neutral-900 p-12 transition-colors">
         <div>
-          <div className="w-10 h-10 bg-[#ED1C24] flex items-center justify-center font-bold text-white mb-6">A</div>
-          <h1 className="text-3xl font-bold tracking-tight text-white mb-3">AMDChat</h1>
-          <p className="text-neutral-400 text-sm leading-relaxed max-w-sm">
-            High-performance, localized LLM orchestration engine. 
-            Connect to the enterprise cluster and begin secure sessions.
+          <div className="w-12 h-12 bg-brand flex items-center justify-center font-extrabold text-white text-xl mb-8 rounded-md">A</div>
+          <h1 className="text-4xl font-extrabold tracking-wider text-white mb-4">AMD Core Gateway</h1>
+          <p className="text-neutral-400 text-base leading-relaxed max-w-sm">
+            High-performance, localized LLM orchestration engine. Connect to the enterprise cluster and begin secure sessions.
           </p>
         </div>
-        <div className="text-xs text-neutral-600 font-mono uppercase tracking-wider">
+        <div className="text-sm text-neutral-500 font-mono uppercase tracking-wider leading-relaxed">
           Node: {tab === 'anonymous' ? 'GUEST_0X' : 'AUTH_REQ'} <br />
-          Latency: <span className="text-[#ED1C24]">OPTIMAL</span>
+          Latency: <span className="text-brand font-bold">OPTIMAL</span>
         </div>
       </div>
 
-      <div className="flex-1 flex items-center justify-center p-6 bg-white dark:bg-[#0a0a0a]">
-        <div className="w-full max-w-sm">
+      <div className="flex-1 flex items-center justify-center p-6 bg-white dark:bg-dark-bg transition-colors">
+        <div className="w-full max-w-md">
           
           {/* Mobile Header (hidden on large screens) */}
           <div className="lg:hidden mb-10">
-            <div className="w-8 h-8 bg-[#ED1C24] flex items-center justify-center font-bold text-white mb-4">A</div>
-            <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">AMDChat</h1>
+            <div className="w-10 h-10 bg-brand flex items-center justify-center font-extrabold text-white text-lg mb-4 rounded-md">A</div>
+            <h1 className="text-3xl font-extrabold text-neutral-900 dark:text-white">AMD Core Gateway</h1>
           </div>
 
-          <div className="mb-6">
-            <h2 className="text-xl font-semibold text-neutral-900 dark:text-white mb-1">
+          <div className="mb-8">
+            <h2 className="text-2xl font-extrabold text-neutral-900 dark:text-white mb-1.5">
               {tab === 'signin' ? 'Session Sign In' : tab === 'signup' ? 'Request Access' : 'Guest Protocol'}
             </h2>
             <p className="text-sm text-neutral-500 dark:text-neutral-400">
@@ -94,12 +82,12 @@ export const AuthScreen: React.FC = () => {
           </div>
 
           {/* Tabs switcher */}
-          <div className="flex border-b border-neutral-200 dark:border-neutral-800 mb-6">
+          <div className="flex border-b border-neutral-200 dark:border-neutral-800 mb-8">
             <button
               onClick={() => { setTab('signin'); setError(null); }}
-              className={`flex-1 py-3 text-xs font-semibold uppercase tracking-wider transition-all cursor-pointer ${
+              className={`flex-1 py-3.5 text-sm font-bold uppercase tracking-wider transition-all cursor-pointer ${
                 tab === 'signin' 
-                  ? 'text-neutral-900 dark:text-white border-b-2 border-[#ED1C24]' 
+                  ? 'text-neutral-900 dark:text-white border-b-3 border-brand' 
                   : 'text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300'
               }`}
             >
@@ -107,9 +95,9 @@ export const AuthScreen: React.FC = () => {
             </button>
             <button
               onClick={() => { setTab('signup'); setError(null); }}
-              className={`flex-1 py-3 text-xs font-semibold uppercase tracking-wider transition-all cursor-pointer ${
+              className={`flex-1 py-3.5 text-sm font-bold uppercase tracking-wider transition-all cursor-pointer ${
                 tab === 'signup' 
-                  ? 'text-neutral-900 dark:text-white border-b-2 border-[#ED1C24]' 
+                  ? 'text-neutral-900 dark:text-white border-b-3 border-brand' 
                   : 'text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300'
               }`}
             >
@@ -117,9 +105,9 @@ export const AuthScreen: React.FC = () => {
             </button>
             <button
               onClick={() => { setTab('anonymous'); setError(null); }}
-              className={`flex-1 py-3 text-xs font-semibold uppercase tracking-wider transition-all cursor-pointer ${
+              className={`flex-1 py-3.5 text-sm font-bold uppercase tracking-wider transition-all cursor-pointer ${
                 tab === 'anonymous' 
-                  ? 'text-neutral-900 dark:text-white border-b-2 border-[#ED1C24]' 
+                  ? 'text-neutral-900 dark:text-white border-b-3 border-brand' 
                   : 'text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300'
               }`}
             >
@@ -128,24 +116,24 @@ export const AuthScreen: React.FC = () => {
           </div>
 
           {error && (
-            <div className="p-3 text-xs bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/50 text-red-600 dark:text-red-400 rounded-sm mb-6">
+            <div className="p-4 text-sm bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/50 text-red-600 dark:text-red-400 rounded-md mb-8">
               {error}
             </div>
           )}
 
           {tab !== 'anonymous' ? (
-            <form onSubmit={handleSubmit} className="space-y-5">
+            <form onSubmit={handleSubmit} className="space-y-6">
               {tab === 'signup' && (
                 <div>
-                  <label className="block text-xs font-medium text-neutral-700 dark:text-neutral-400 mb-1.5 uppercase tracking-wide">Display Name</label>
+                  <label className="block text-xs font-bold text-neutral-500 dark:text-neutral-400 mb-2 uppercase tracking-wider">Display Name</label>
                   <div className="relative">
-                    <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" size={16} />
+                    <UserIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-400" size={18} />
                     <input
                       type="text"
                       value={displayName}
                       onChange={(e) => setDisplayName(e.target.value)}
-                      placeholder="Identifier"
-                      className="w-full text-sm pl-10 pr-4 py-2.5 rounded-sm border border-neutral-300 dark:border-neutral-800 bg-white dark:bg-[#111111] text-neutral-900 dark:text-neutral-200 focus:outline-none focus:border-[#ED1C24] dark:focus:border-[#ED1C24] transition-colors"
+                      placeholder="e.g. Developer X"
+                      className="w-full text-base pl-11 pr-4 py-3 rounded-md border border-neutral-300 dark:border-neutral-800 bg-white dark:bg-[#0c0c0c] text-neutral-900 dark:text-neutral-200 focus:outline-none focus:border-brand dark:focus:border-brand transition-colors"
                       required
                     />
                   </div>
@@ -153,30 +141,30 @@ export const AuthScreen: React.FC = () => {
               )}
 
               <div>
-                <label className="block text-xs font-medium text-neutral-700 dark:text-neutral-400 mb-1.5 uppercase tracking-wide">Email</label>
+                <label className="block text-xs font-bold text-neutral-500 dark:text-neutral-400 mb-2 uppercase tracking-wider">Email</label>
                 <div className="relative">
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" size={16} />
+                  <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-400" size={18} />
                   <input
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="user@domain.com"
-                    className="w-full text-sm pl-10 pr-4 py-2.5 rounded-sm border border-neutral-300 dark:border-neutral-800 bg-white dark:bg-[#111111] text-neutral-900 dark:text-neutral-200 focus:outline-none focus:border-[#ED1C24] dark:focus:border-[#ED1C24] transition-colors"
+                    className="w-full text-base pl-11 pr-4 py-3 rounded-md border border-neutral-300 dark:border-neutral-800 bg-white dark:bg-[#0c0c0c] text-neutral-900 dark:text-neutral-200 focus:outline-none focus:border-brand dark:focus:border-brand transition-colors"
                     required
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-neutral-700 dark:text-neutral-400 mb-1.5 uppercase tracking-wide">Password</label>
+                <label className="block text-xs font-bold text-neutral-500 dark:text-neutral-400 mb-2 uppercase tracking-wider">Password</label>
                 <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" size={16} />
+                  <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-400" size={18} />
                   <input
                     type="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
-                    className="w-full text-sm pl-10 pr-4 py-2.5 rounded-sm border border-neutral-300 dark:border-neutral-800 bg-white dark:bg-[#111111] text-neutral-900 dark:text-neutral-200 focus:outline-none focus:border-[#ED1C24] dark:focus:border-[#ED1C24] transition-colors"
+                    className="w-full text-base pl-11 pr-4 py-3 rounded-md border border-neutral-300 dark:border-neutral-800 bg-white dark:bg-[#0c0c0c] text-neutral-900 dark:text-neutral-200 focus:outline-none focus:border-brand dark:focus:border-brand transition-colors"
                     required
                   />
                 </div>
@@ -185,23 +173,23 @@ export const AuthScreen: React.FC = () => {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full py-2.5 rounded-sm bg-[#ED1C24] text-white font-medium text-sm flex items-center justify-center gap-2 hover:bg-[#c9171e] transition-colors disabled:opacity-50 cursor-pointer"
+                className="w-full py-3 rounded-md bg-brand text-white font-bold text-sm flex items-center justify-center gap-2 hover:bg-brand-hover transition-colors disabled:opacity-50 cursor-pointer uppercase tracking-wider shadow-sm"
               >
                 {loading ? (
-                  <div className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin"></div>
+                  <div className="w-5 h-5 rounded-full border-2 border-white/30 border-t-white animate-spin"></div>
                 ) : (
                   <>
-                    {tab === 'signin' ? 'Authenticate' : 'Register'} <ArrowRight size={16} />
+                    {tab === 'signin' ? 'Authenticate Session' : 'Request Credentials'} <ArrowRight size={18} />
                   </>
                 )}
               </button>
             </form>
           ) : (
             <div className="space-y-6">
-              <div className="p-5 bg-neutral-50 dark:bg-[#111111] border border-neutral-200 dark:border-neutral-800 rounded-sm">
-                <ShieldCheck size={24} className="text-[#ED1C24] mb-3" />
-                <h3 className="text-sm font-semibold text-neutral-900 dark:text-white mb-2">Guest Access Mode</h3>
-                <p className="text-xs text-neutral-600 dark:text-neutral-400 leading-relaxed">
+              <div className="p-6 bg-neutral-50 dark:bg-dark-surface border border-neutral-200 dark:border-neutral-800 rounded-md shadow-sm">
+                <ShieldCheck size={28} className="text-brand mb-3.5" />
+                <h3 className="text-sm font-bold text-neutral-900 dark:text-white mb-2 uppercase tracking-wider">Guest Access Mode</h3>
+                <p className="text-sm text-neutral-600 dark:text-neutral-400 leading-relaxed">
                   Proceed as an anonymous user. Session data is volatile and will not be linked to a persistent identity. You may configure a display alias post-login.
                 </p>
               </div>
@@ -209,13 +197,13 @@ export const AuthScreen: React.FC = () => {
               <button
                 onClick={handleAnonymousSubmit}
                 disabled={loading}
-                className="w-full py-2.5 rounded-sm bg-[#ED1C24] text-white font-medium text-sm flex items-center justify-center gap-2 hover:bg-[#c9171e] transition-colors disabled:opacity-50 cursor-pointer"
+                className="w-full py-3 rounded-md bg-brand text-white font-bold text-sm flex items-center justify-center gap-2 hover:bg-brand-hover transition-colors disabled:opacity-50 cursor-pointer uppercase tracking-wider shadow-sm"
               >
                 {loading ? (
-                  <div className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin"></div>
+                  <div className="w-5 h-5 rounded-full border-2 border-white/30 border-t-white animate-spin"></div>
                 ) : (
                   <>
-                    Initialize Guest Session <ArrowRight size={16} />
+                    Initialize Guest Session <ArrowRight size={18} />
                   </>
                 )}
               </button>
