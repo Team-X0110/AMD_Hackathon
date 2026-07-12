@@ -4,6 +4,10 @@ import time
 import json
 from datetime import datetime
 
+if sys.platform == "win32":
+    sys.stdout.reconfigure(encoding='utf-8')
+    sys.stderr.reconfigure(encoding='utf-8')
+
 # Adjust Python path to allow running directly from src/ or project root
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
@@ -99,7 +103,7 @@ def main():
     print("Starting AMD Chat Worker...")
     try:
         # ---> ADD THIS IMPORT AND SYNC CALL <---
-        from src.cache.semantic_cache import sync_from_firebase
+        from src.cache.global_semantic_cache import sync_from_firebase
         print("Initializing Local Semantic Cache...")
         sync_from_firebase("semantic_cache")
         # ---------------------------------------

@@ -90,7 +90,7 @@ def run_pipeline(user_prompt: str) -> dict:
     add_to_local_cache(user_prompt, final_response)
 
     # ── Logging ───────────────────────────────────────────────────────────────
-    _log_run(user_prompt, goal_result, plan_result, total_tokens, latency)
+    _log_run(user_prompt, goal_result, plan_result, total_tokens, fireworks_tokens, latency)
 
     return final_response
 
@@ -119,8 +119,7 @@ def _log_run(
 
     # ── Firestore ──────────────────────────────────────────────────────────────
     try:
-        firestore_record = {**record, "timestamp": record.get("timestamp") or fs.SERVER_TIMESTAMP}
-        get_db().child(RUNS_COLLECTION).push(firestore_record)
+        get_db().child(RUNS_COLLECTION).push(record)
     except Exception as exc:
         logger.warning("RTDB run log failed: %s", exc)
 

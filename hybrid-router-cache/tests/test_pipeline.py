@@ -8,7 +8,17 @@ Run:
     python -m pytest tests/test_pipeline.py -v
 """
 from __future__ import annotations
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
+import sys
+
+# ── Pre-stub heavy deps so pipeline.py can be imported without FAISS/transformers ──
+# These are replaced by real patches inside each test anyway.
+_stub_cache = MagicMock()
+_stub_cache.semantic_lookup = MagicMock(return_value=(None, 0.0))
+_stub_cache.add_to_local_cache = MagicMock()
+sys.modules.setdefault("src.cache.global_semantic_cache", _stub_cache)
+
+import src.pipeline  # noqa: E402 — must be imported after stub so @patch can resolve it
 
 MOCK_GOAL_RESULT_NONE = {
     "goal": {
@@ -42,9 +52,11 @@ MOCK_PLAN_RESULT_EXACT = {**MOCK_PLAN_RESULT_NONE, "cache_hit": "exact", "tokens
 
 
 @patch("src.pipeline._log_run")  # suppress Firestore/disk writes in unit tests
+@patch("src.pipeline.add_to_local_cache")
+@patch("src.pipeline.global_semantic_lookup", return_value=(None, 0.0))
 @patch("src.pipeline.plan_tasks_with_semantic", return_value=MOCK_PLAN_RESULT_NONE)
 @patch("src.pipeline.understand_goal_with_semantic", return_value=MOCK_GOAL_RESULT_NONE)
-def test_pipeline_cache_miss(mock_goal, mock_plan, mock_log):
+def test_pipeline_cache_miss(mock_goal, mock_plan, mock_sem, mock_cache, mock_log):
     """Cold start — both agents miss, tokens > 0."""
     from src.pipeline import run_pipeline
     result = run_pipeline("build a todo API")
@@ -59,9 +71,11 @@ def test_pipeline_cache_miss(mock_goal, mock_plan, mock_log):
 
 
 @patch("src.pipeline._log_run")
+@patch("src.pipeline.add_to_local_cache")
+@patch("src.pipeline.global_semantic_lookup", return_value=(None, 0.0))
 @patch("src.pipeline.plan_tasks_with_semantic", return_value=MOCK_PLAN_RESULT_EXACT)
 @patch("src.pipeline.understand_goal_with_semantic", return_value=MOCK_GOAL_RESULT_EXACT)
-def test_pipeline_full_cache_hit(mock_goal, mock_plan, mock_log):
+def test_pipeline_full_cache_hit(mock_goal, mock_plan, mock_sem, mock_cache, mock_log):
     """Both agents hit exact cache — zero tokens."""
     from src.pipeline import run_pipeline
     result = run_pipeline("build a todo API")
@@ -71,10 +85,12 @@ def test_pipeline_full_cache_hit(mock_goal, mock_plan, mock_log):
 
 
 @patch("src.pipeline._log_run")
+@patch("src.pipeline.add_to_local_cache")
+@patch("src.pipeline.global_semantic_lookup", return_value=(None, 0.0))
 @patch("src.pipeline.plan_tasks_with_semantic", return_value=MOCK_PLAN_RESULT_EXACT)
 @patch("src.pipeline.understand_goal_with_semantic",
        return_value={**MOCK_GOAL_RESULT_NONE, "cache_hit": "semantic(0.94)", "tokens_used": 0})
-def test_pipeline_semantic_goal_hit(mock_goal, mock_plan, mock_log):
+def test_pipeline_semantic_goal_hit(mock_goal, mock_plan, mock_sem, mock_cache, mock_log):
     """Goal hits semantic cache, plan hits exact cache — zero tokens total."""
     from src.pipeline import run_pipeline
     result = run_pipeline("create a todo REST API")
@@ -83,9 +99,11 @@ def test_pipeline_semantic_goal_hit(mock_goal, mock_plan, mock_log):
 
 
 @patch("src.pipeline._log_run")
+@patch("src.pipeline.add_to_local_cache")
+@patch("src.pipeline.global_semantic_lookup", return_value=(None, 0.0))
 @patch("src.pipeline.plan_tasks_with_semantic", return_value=MOCK_PLAN_RESULT_NONE)
 @patch("src.pipeline.understand_goal_with_semantic", return_value=MOCK_GOAL_RESULT_NONE)
-def test_pipeline_returns_latency(mock_goal, mock_plan, mock_log):
+def test_pipeline_returns_latency(mock_goal, mock_plan, mock_sem, mock_cache, mock_log):
     """Latency field must be a non-negative float."""
     from src.pipeline import run_pipeline
     result = run_pipeline("any prompt")
