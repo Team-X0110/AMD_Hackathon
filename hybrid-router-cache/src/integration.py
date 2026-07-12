@@ -113,7 +113,7 @@ def verifier_inference_fn(model_id: str, prompt: str, params: Dict[str, Any]) ->
     is_local = "local" in model_id.lower() or model_id == "local" # basic check
     
     if is_local:
-        from config import LOCAL_MODEL
+        from src.config import LOCAL_MODEL
         api_params["model"] = LOCAL_MODEL
         api_params["stream"] = False
         api_params["format"] = "json"

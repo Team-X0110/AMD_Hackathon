@@ -11,9 +11,12 @@ import json
 import time
 import requests
 
-# ── Config ────────────────────────────────────────────────────────────────────
-OLLAMA_URL = "http://localhost:11434/api/chat"
-MODEL = "llama3.1:8b"
+import os
+from dotenv import load_dotenv
+load_dotenv()
+
+OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434/api/chat")
+MODEL = os.environ.get("LOCAL_MODEL", "gemma3:1b")
 TEMPERATURE = 0.2
 TIMEOUT = 120  # seconds — CPU inference can be slow
 
